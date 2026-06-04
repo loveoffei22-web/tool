@@ -893,388 +893,292 @@ function ShiftPill({shift}){const m={day:{c:'#FCD34D',bg:'rgba(252,211,77,.15)',
 // ── DASHBOARD ──────────────────────────────────────────────────────
 const SLOTS=[{id:'9am',label:'9AM Handover',start:9,end:10},{id:'12pm',label:'12PM Update',start:12,end:13},{id:'cob',label:'4PM COB',start:16,end:17}];
 
-function Dashboard({tickets,carryTix,shifts,onShift,onSettings,onNav,signedInName}){
-  const[now,setNow]=useState(()=>new Date());
-  useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id);},[]);
-  const wat=new Date(now.toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
-  const h=wat.getHours(),m=wat.getMinutes();
-  const watTime=wat.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const watDate=wat.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-  const greetE=h<12?'☀️':h<17?'🌤️':'🌙';
-  const dayProg=Math.min(Math.round(((h*60+m)/(17*60))*100),100);
+function Dashboard({ tickets, carryTix, shifts, onShift, onSettings, onNav, signedInName }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {const id = setInterval(() => setNow(new Date()), 1000);return () => clearInterval(id);}, []);
+  const wat = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
+  const h = wat.getHours(),m = wat.getMinutes();
+  const watTime = wat.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const watDate = wat.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const greetE = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
+  const dayProg = Math.min(Math.round((h * 60 + m) / (17 * 60) * 100), 100);
 
-  const carry=Array.isArray(carryTix)?carryTix:[];
-  const carryPrg=carry.filter(function(t){return t.status==='progress';}).length;
-  const carryUnr=carry.filter(function(t){return t.status==='unresolved';}).length;
-  const all=tickets.length;
-  const res=tickets.filter(function(t){return t.status==='resolved';}).length;
-  const prg=tickets.filter(function(t){return t.status==='progress';}).length+carryPrg;
-  const unr=tickets.filter(function(t){return t.status==='unresolved'||t.status==='pending';}).length+carryUnr;
-  const watTodayFull=watTodayStr();const today=tickets.filter(function(t){if(t.created){var d=new Date(t.created);if(!isNaN(d.getTime())){var w=new Date(d.toLocaleString('en-US',{timeZone:'Africa/Lagos'}));var ds=w.getFullYear()+'-'+String(w.getMonth()+1).padStart(2,'0')+'-'+String(w.getDate()).padStart(2,'0');return ds===watTodayFull;}}if(t.day&&t.day>0){return t.day===watDayNow()&&String(t.created||'').startsWith(watTodayFull.slice(0,7));}return false;});
-  const rate=all>0?Math.round(res/all*100):0;
+  const carry = Array.isArray(carryTix) ? carryTix : [];
+  const carryPrg = carry.filter(function (t) {return t.status === 'progress';}).length;
+  const carryUnr = carry.filter(function (t) {return t.status === 'unresolved';}).length;
+  const all = tickets.length;
+  const res = tickets.filter(function (t) {return t.status === 'resolved';}).length;
+  const prg = tickets.filter(function (t) {return t.status === 'progress';}).length + carryPrg;
+  const unr = tickets.filter(function (t) {return t.status === 'unresolved' || t.status === 'pending';}).length + carryUnr;
+  const watTodayFull = watTodayStr();const today = tickets.filter(function (t) {if (t.created) {var d = new Date(t.created);if (!isNaN(d.getTime())) {var w = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));var ds = w.getFullYear() + '-' + String(w.getMonth() + 1).padStart(2, '0') + '-' + String(w.getDate()).padStart(2, '0');return ds === watTodayFull;}}if (t.day && t.day > 0) {return t.day === watDayNow() && String(t.created || '').startsWith(watTodayFull.slice(0, 7));}return false;});
+  const rate = all > 0 ? Math.round(res / all * 100) : 0;
 
   // Responsible-party matching: prefer t.resp name match, fall back to category
-  function matchParty(t,r){
-    var respName=(t.resp||t.responsible||'').toString().trim().toLowerCase();
-    if(respName&&respName===r.name.toLowerCase())return true;
-    if(!respName&&t.category){var key=r.cat.split('/')[0].trim().toLowerCase();return t.category.toLowerCase().includes(key);}
+  function matchParty(t, r) {
+    var respName = (t.resp || t.responsible || '').toString().trim().toLowerCase();
+    if (respName && respName === r.name.toLowerCase()) return true;
+    if (!respName && t.category) {var key = r.cat.split('/')[0].trim().toLowerCase();return t.category.toLowerCase().includes(key);}
     return false;
   }
-  const cum=EK_RESP.map(function(r){
-    var myTix=tickets.filter(function(t){return matchParty(t,r);});
-    var myRes=myTix.filter(function(t){return t.status==='resolved';}).length;
-    var myPrg=myTix.filter(function(t){return t.status==='progress';}).length;
-    var myUnr=myTix.filter(function(t){return t.status==='unresolved';}).length;
-    var pct=myTix.length>0?Math.round(myRes/myTix.length*100):0;
-    var todayCount=myTix.filter(function(t){return watDayOf(t)===watDayNow();}).length;
-    return Object.assign({},r,{grand:myTix.length,res:myRes,prg:myPrg,unr:myUnr,pct:pct,todayCount:todayCount});
+  const cum = EK_RESP.map(function (r) {
+    var myTix = tickets.filter(function (t) {return matchParty(t, r);});
+    var myRes = myTix.filter(function (t) {return t.status === 'resolved';}).length;
+    var myPrg = myTix.filter(function (t) {return t.status === 'progress';}).length;
+    var myUnr = myTix.filter(function (t) {return t.status === 'unresolved';}).length;
+    var pct = myTix.length > 0 ? Math.round(myRes / myTix.length * 100) : 0;
+    var todayCount = myTix.filter(function (t) {return watDayOf(t) === watDayNow();}).length;
+    return Object.assign({}, r, { grand: myTix.length, res: myRes, prg: myPrg, unr: myUnr, pct: pct, todayCount: todayCount });
   });
 
-  const circ=2*Math.PI*22;
-  function Dial({v,total,color}){const pct=total>0?v/total:0;const off=circ*(1-pct);return(
-    <svg width="54" height="54" viewBox="0 0 54 54" style={{transform:'rotate(-90deg)'}}>
-      <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="5"/>
+  const circ = 2 * Math.PI * 22;
+  function Dial({ v, total, color }) {const pct = total > 0 ? v / total : 0;const off = circ * (1 - pct);return (
+      <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="5" />
       <circle cx="27" cy="27" r="22" fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
         strokeDasharray={circ} strokeDashoffset={off}
-        style={{filter:'drop-shadow(0 0 5px '+color+'77)',transition:'stroke-dashoffset .8s ease'}}/>
+        style={{ filter: 'drop-shadow(0 0 5px ' + color + '77)', transition: 'stroke-dashoffset .8s ease' }} />
     </svg>);}
 
-  const KPIs=[
-    {label:'Total',value:all,color:'#60A5FA',sub:'All time'},
-    {label:'Resolved',value:res,color:'#22C55E',sub:rate+'% rate'},
-    {label:'In Progress',value:prg,color:'#F59E0B',sub:'Being handled'},
-    {label:'Unresolved',value:unr,color:'#EF4444',sub:'Action needed'},
-    {label:"Today's",value:today.length,color:'#C4B5FD',sub:'Day '+new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'})).getDate()},
-  ];
+  const KPIs = [
+  { label: 'Total', value: all, color: '#60A5FA', sub: 'All time' },
+  { label: 'Resolved', value: res, color: '#22C55E', sub: rate + '% rate' },
+  { label: 'In Progress', value: prg, color: '#F59E0B', sub: 'Being handled' },
+  { label: 'Unresolved', value: unr, color: '#EF4444', sub: 'Action needed' },
+  { label: "Today's", value: today.length, color: '#C4B5FD', sub: 'Day ' + new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getDate() }];
 
-  const onShiftF=h<12?'day':h<17?'day':'night';
-  const onShiftAgents=EK_AGENTS.filter(function(a){return shifts[a.id]===onShiftF||shifts[a.id]==='day'||shifts[a.id]==='night';}).length;
 
-  return(
+  const onShiftF = h < 12 ? 'day' : h < 17 ? 'day' : 'night';
+  const onShiftAgents = EK_AGENTS.filter(function (a) {return shifts[a.id] === onShiftF || shifts[a.id] === 'day' || shifts[a.id] === 'night';}).length;
+
+  return (
     <div>
       {/* HERO */}
       <div className="hero">
         <div className="hero-row">
           <div>
-            <div className="hero-sub" style={{marginBottom:8}}>EKEDP Customer Experience · Marina HQ</div>
+            <div className="hero-sub" style={{ marginBottom: 8 }}>EKEDP Customer Experience · Marina HQ</div>
             <div className="hero-greeting">{greet}, {signedInName} {greetE}</div>
-            <div style={{font:'500 12px/1.3 Sora,sans-serif',color:'var(--muted)',marginTop:8}}>
-              {`📊 Daily Roll-up · Day ${new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'})).getDate()} · ${watDate}`}
+            <div style={{ font: '500 12px/1.3 Sora,sans-serif', color: 'var(--muted)', marginTop: 8 }}>
+              {`📊 Analytics Dashboard · Day ${new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getDate()} · ${watDate}`}
             </div>
           </div>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8}}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             <div className="hero-clock-box">
-              <span className="live-dot"/>
-              <span className="hero-clock">{watTime}</span>
+              <span className="live-dot" />
+              <span className="hero-clock" style={{ color: "rgb(26, 12, 12)" }}>{watTime}</span>
               <span className="hero-clock-label">WAT</span>
-              <button onClick={onSettings} style={{background:'none',border:'none',cursor:'pointer',color:'var(--muted)',display:'flex',marginLeft:4}}>{Ico.settings}</button>
+              <button onClick={onSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', marginLeft: 4 }}>{Ico.settings}</button>
             </div>
-            <div style={{font:'600 11px/1 Sora,sans-serif',color:'var(--muted)'}}>{onShiftAgents} of {EK_AGENTS.length} agents on shift</div>
+            <div style={{ font: '600 11px/1 Sora,sans-serif', color: 'var(--muted)' }}>{onShiftAgents} of {EK_AGENTS.length} agents on shift</div>
           </div>
         </div>
         {/* Slot timeline removed — covered by Success Scorecard below */}
       </div>
 
-      {/* KPI ROW */}
-      <div className="kpi-row" style={{paddingBottom:0}}>
-        {KPIs.map(function(k){return(
-          <div key={k.label} className="kpi-card"
-            onMouseEnter={function(e){e.currentTarget.style.borderColor=k.color;e.currentTarget.style.transform='translateY(-2px)';}}
-            onMouseLeave={function(e){e.currentTarget.style.borderColor='var(--bsoft)';e.currentTarget.style.transform='none';}}>
-            <div className="kpi-ring-wrap">
-              <Dial v={k.value} total={all||1} color={k.color}/>
-              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',font:'800 10px/1 JetBrains Mono,monospace',color:k.color}}>{all>0?Math.round(k.value/all*100):0}</div>
+      {/* SUCCESS SCORECARD (compact) */}
+      {function () {
+        const watTodayStr2 = wat.toISOString().slice(0, 10);
+        function ticketDate2(t) {
+          if (t.created) return String(t.created).slice(0, 10);
+          return null;
+        }
+        const todayList2 = tickets.filter(function (t) {return ticketDate2(t) === watTodayStr2;});
+        const todayResolved2 = todayList2.filter(function (t) {return t.status === 'resolved';}).length;
+        const todayRate2 = todayList2.length ? Math.round(todayResolved2 / todayList2.length * 100) : 0;
+        const reportsSent2 = (h >= 9 ? 1 : 0) + (h >= 12 ? 1 : 0) + (h >= 17 ? 1 : 0);
+        const isCOB2 = h >= 17;
+        const SCORE2 = [
+        { l: 'Same-day Resolution', v: todayList2.length ? todayRate2 + '%' : '—', ok: todayRate2 >= 80 && todayList2.length > 0, warn: todayList2.length > 0 && todayRate2 < 80, c: '#22C55E' },
+        { l: 'Tickets Today', v: todayList2.length, ok: todayList2.length > 0, warn: false, c: '#60A5FA' },
+        { l: 'Reports Sent', v: reportsSent2 + ' / 3', ok: reportsSent2 === 3, warn: isCOB2 && reportsSent2 < 3, c: '#FBBF24' }];
+
+        return (
+          <div style={{ padding: '10px 28px 0' }}>
+            <div style={{ background: 'rgba(0,0,0,.18)', border: '1px solid var(--bsoft)', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <div style={{ font: '700 10px/1 Sora,sans-serif', color: 'var(--ek-gold)', letterSpacing: '.18em', textTransform: 'uppercase' }}>Success Scorecard · Today</div>
+                <a href="Success Criteria.html" target="_blank" style={{ font: '600 10px/1 Sora,sans-serif', color: 'var(--muted)', textDecoration: 'none' }}>View targets →</a>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                {SCORE2.map(function (s) {
+                  const dot = s.ok ? '#22C55E' : s.warn ? '#EF4444' : '#94A3B8';
+                  const mark = s.ok ? '✓' : s.warn ? '✕' : '·';
+                  return (
+                    <div key={s.l} style={{ background: 'rgba(0,0,0,.18)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--bsoft)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                        <span style={{ font: '600 9px/1 Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>{s.l}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ font: "800 20px/1 'JetBrains Mono',monospace", color: s.c }}>{s.v}</span>
+                        <span style={{ font: '700 12px/1 Sora,sans-serif', color: dot }}>{mark}</span>
+                      </div>
+                    </div>);
+
+                })}
+              </div>
             </div>
-            <div>
-              <div className="kpi-label">{k.label}</div>
-              <div className="kpi-num" style={{color:k.color}}>{k.value}</div>
-              <div className="kpi-sub">{k.sub}</div>
+          </div>);
+
+      }()}
+
+      {/* DAILY VOLUME TREND */}
+      {function () {
+        var dayN2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getDate();
+        var mo2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getMonth();
+        var yr2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getFullYear();
+        var MON2 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var phoneFreqD = {};var meterFreqD = {};
+        tickets.forEach(function (t) {var p = String(t.phone || '').trim();var m = String(t.meter || '').trim();if (p) phoneFreqD[p] = (phoneFreqD[p] || 0) + 1;if (m && m !== '0') meterFreqD[m] = (meterFreqD[m] || 0) + 1;});
+        function isRepeatD(t) {var p = String(t.phone || '').trim();var m = String(t.meter || '').trim();var pc = phoneFreqD[p] || 0;var mc = meterFreqD[m] && m !== '0' ? meterFreqD[m] : 0;return Math.max(pc, mc) > 1;}
+        var byDay2 = [];for (var d2 = 1; d2 <= dayN2; d2++) {var tx2 = tickets.filter(function (t) {return watDayOf(t) === d2;});byDay2.push({ day: d2, total: tx2.length, res: tx2.filter(function (t) {return t.status === 'resolved';}).length, unr: tx2.filter(function (t) {return t.status === 'unresolved' || t.status === 'pending';}).length, rep: tx2.filter(isRepeatD).length });}
+        var xLbls = byDay2.map(function (b) {return MON2[mo2] + ' ' + b.day;});
+        var fullLbls = byDay2.map(function (b) {return b.day + ' ' + MON2[mo2] + ' ' + yr2;});
+        var series2 = [
+        { key: 'total', label: 'Total', color: '#6366F1', on: true, data: byDay2.map(function (b) {return b.total;}) },
+        { key: 'resolved', label: 'Resolved', color: '#22C55E', on: true, data: byDay2.map(function (b) {return b.res;}) },
+        { key: 'unresolved', label: 'Unresolved', color: '#EF4444', on: true, data: byDay2.map(function (b) {return b.unr;}) },
+        { key: 'repeated', label: 'Repeated', color: '#A78BFA', on: true, data: byDay2.map(function (b) {return b.rep;}) }];
+
+        return (
+          <div style={{ padding: '16px 28px 0' }}>
+            <div className="card">
+              <div className="card-head">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366F1', display: 'inline-block' }} />📈 Daily Volume Trend</h3>
+              </div>
+              <div style={{ padding: '18px 16px 10px' }}>
+                <DashTrendChart series={series2} xLabels={xLbls} fullLabels={fullLbls} height={300} />
+              </div>
             </div>
+          </div>);
+
+      }()}
+
+      {/* KPI ROW — Analytics style */}
+      <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
+        {[
+        { label: 'Total', value: all, color: '#60A5FA', sub: 'All time' },
+        { label: 'Resolved', value: res, color: '#22C55E', sub: rate + '% rate' },
+        { label: 'Resolution Rate', value: rate + '%', color: '#34D399', sub: 'target ≥ 80%' },
+        { label: 'In Progress', value: prg, color: '#F59E0B', sub: 'being handled' },
+        { label: 'Unresolved', value: unr, color: '#EF4444', sub: 'action needed' },
+        { label: "Today's", value: today.length, color: '#C4B5FD', sub: 'Day ' + new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).getDate() }].
+        map(function (k) {return (
+            <div key={k.label} className="kpi-card" style={{ '--kc': k.color }}
+            onMouseEnter={function (e) {e.currentTarget.style.borderColor = k.color;}}
+            onMouseLeave={function (e) {e.currentTarget.style.borderColor = 'var(--bsoft)';}}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+              <span className="kpi-label">{k.label}</span>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: k.color, boxShadow: '0 0 9px ' + k.color, flexShrink: 0 }} />
+            </div>
+            <div className="kpi-num" style={{ color: k.color, fontSize: 28 }}>{k.value}</div>
+            <div className="kpi-sub">{k.sub}</div>
           </div>);})}
       </div>
 
-      {/* SUCCESS SCORECARD */}
-      {(function(){
-        const watTodayStr=wat.toISOString().slice(0,10);
-        function ticketDate(t){
-          if(t.created)return String(t.created).slice(0,10);
-          if(t.received){try{return new Date(new Date(t.received).toLocaleString('en-US',{timeZone:'Africa/Lagos'})).toISOString().slice(0,10);}catch(e){return null;}}
-          return null;
-        }
-        const todayList=tickets.filter(function(t){return ticketDate(t)===watTodayStr;});
-        const todayResolved=todayList.filter(function(t){return t.status==='resolved';}).length;
-        const todayRate=todayList.length?Math.round(todayResolved/todayList.length*100):0;
-        const reportsSent=(h>=9?1:0)+(h>=12?1:0)+(h>=17?1:0);
-        const unassigned=todayList.filter(function(t){
-          const r=(t.responsible||t.resp||'').toString().trim();
-          return !r || r.toLowerCase()==='customer experience' && !t.responsible && !t.resp;
-        }).filter(function(t){return !(t.responsible||t.resp);}).length;
-        const isCOB=h>=17;
-        const SCORE=[
-          {l:'Same-day Resolution',v:todayList.length?todayRate+'%':'—',sub:'target ≥ 80%',ok:todayRate>=80&&todayList.length>0,warn:todayList.length>0&&todayRate<80,c:'#22C55E'},
-          {l:'Tickets Logged Today',v:todayList.length,sub:'received today (WAT)',ok:todayList.length>0,warn:false,c:'#60A5FA'},
-          {l:'Daily Reports Sent',v:reportsSent+' / 3',sub:'9 AM · 12 PM · 4 PM',ok:reportsSent===3,warn:isCOB&&reportsSent<3,c:'#FBBF24'},
-          {l:'Unassigned at COB',v:unassigned,sub:isCOB?'target = 0':'check at 4 PM',ok:unassigned===0,warn:isCOB&&unassigned>0,c:'#A78BFA'},
-        ];
-        return(
-          <div style={{padding:'10px 28px 0'}}>
-            <div style={{background:'rgba(0,0,0,.18)',border:'1px solid var(--bsoft)',borderRadius:12,padding:'12px 14px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}}>
-                <div style={{font:'700 10px/1 Sora,sans-serif',color:'var(--ek-gold)',letterSpacing:'.18em',textTransform:'uppercase'}}>Success Scorecard · Today</div>
-                <a href="Success Criteria.html" target="_blank" style={{font:'600 10px/1 Sora,sans-serif',color:'var(--muted)',textDecoration:'none'}}>View targets →</a>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
-                {SCORE.map(function(s){
-                  const dot=s.ok?'#22C55E':s.warn?'#EF4444':'#94A3B8';
-                  const mark=s.ok?'✓':s.warn?'✕':'·';
-                  return(
-                    <div key={s.l} style={{background:'rgba(255,255,255,.03)',border:'1px solid var(--bsoft)',borderRadius:10,padding:'10px 12px',borderLeft:'3px solid '+dot}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                        <span style={{font:'700 9px/1 Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em'}}>{s.l}</span>
-                        <span style={{width:16,height:16,borderRadius:'50%',background:dot,color:'#fff',font:'900 10px/1 Sora,sans-serif',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>{mark}</span>
+      {/* STATUS SPLIT + BY CATEGORY */}
+      {function () {
+        var catColors2 = ['#6366F1', '#F97316', '#22C55E', '#EF4444', '#F59E0B', '#8B5CF6', '#2DD4BF', '#EC4899', '#60A5FA', '#34D399'];
+        var byCat2 = EK_CATS.map(function (c, i) {var tx = tickets.filter(function (t) {return t.category === c;});var rs = tx.filter(function (t) {return t.status === 'resolved';}).length;return { cat: c, total: tx.length, res: rs, pct: tx.length ? Math.round(rs / tx.length * 100) : 0, color: catColors2[i % catColors2.length] };}).filter(function (c) {return c.total > 0;}).sort(function (a, b) {return b.total - a.total;});
+        var maxCat2 = Math.max.apply(null, byCat2.map(function (c) {return c.total;}).concat([1]));
+        return (
+          <div style={{ padding: '16px 28px 0', display: 'grid', gridTemplateColumns: 'minmax(0,360px) 1fr', gap: 16 }}>
+            <div className="card">
+              <div className="card-head"><h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} />Status Split</h3><span style={{ font: '600 10px Sora,sans-serif', color: 'var(--muted)' }}>{all} total</span></div>
+              <div style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: 18 }}>                <DonutChart resolved={res} progress={prg} unresolved={unr} />
+                <div style={{ flex: 1 }}>
+                  {[{ label: 'Resolved', v: res, c: '#22C55E' }, { label: 'In Progress', v: prg, c: '#F59E0B' }, { label: 'Unresolved', v: unr, c: '#EF4444' }].map(function (s) {var tot = res + prg + unr || 1;return (
+                      <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.c, flexShrink: 0, boxShadow: '0 0 6px ' + s.c }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ font: '600 11px/1 Sora,sans-serif', color: 'var(--text)' }}>{s.label}</span>
+                          <span style={{ font: "700 11px/1 'JetBrains Mono',monospace", color: s.c }}>{s.v}</span>
+                        </div>
+                        <div style={{ height: 3, background: 'rgba(255,255,255,.06)', borderRadius: 3 }}><div style={{ height: 3, width: Math.round(s.v / tot * 100) + '%', background: s.c, borderRadius: 3, transition: 'width .6s' }} /></div>
                       </div>
-                      <div style={{font:"800 22px/1 'JetBrains Mono',monospace",color:s.c,marginBottom:3}}>{s.v}</div>
-                      <div style={{font:'500 10px/1.3 Sora,sans-serif',color:'var(--muted)'}}>{s.sub}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* BACKLOG PROGRESS + RESPONSIBLE PARTY LEADERBOARD */}
-      {(function(){
-        var TODAY=new Date();
-        // Carry-forward: use carryTix (unresolved from prev month) passed from App
-        // allCarry = all tickets from prior months (any status), allPending = unresolved subset
-        var _watNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
-        var watNowYM=_watNow.getFullYear()+'-'+String(_watNow.getMonth()+1).padStart(2,'0');
-        var allCarry=tickets.filter(function(t){var ym=shiftWatYM(t);return ym&&ym<watNowYM;});
-        var allPending=allCarry.filter(function(t){return t.status!=='resolved';});
-        var cfTotal=allCarry.length;
-        var cfResolved=allCarry.filter(function(t){return t.status==='resolved';}).length;
-        var cfPending=cfTotal-cfResolved;
-        var cfPct=cfTotal?Math.round(cfResolved/cfTotal*100):0;
-        var cfCrit=allPending.filter(function(t){
-          var d=shiftWatDate(t);if(!d)return false;
-          return Math.floor((TODAY-new Date(d+'T00:00:00'))/86400000)>=14;
-        }).length;
-
-        // Responsible party leaderboard from ALL tickets
-        var respMap={};
-        tickets.forEach(function(t){
-          var r=(t.responsible||t.resp||'').trim();
-          if(!r||r.toLowerCase()==='customer experience')return;
-          if(!respMap[r])respMap[r]={total:0,res:0,prg:0,unr:0};
-          respMap[r].total++;
-          if(t.status==='resolved')respMap[r].res++;
-          else if(t.status==='progress')respMap[r].prg++;
-          else respMap[r].unr++;
-        });
-        var leaders=Object.entries(respMap).map(function(e){
-          var p=e[1].total?Math.round(e[1].res/e[1].total*100):0;
-          return{name:e[0],pct:p,total:e[1].total,res:e[1].res,prg:e[1].prg,unr:e[1].unr};
-        }).sort(function(a,b){return b.total-a.total;}).slice(0,8);
-        var maxTotal=Math.max.apply(null,leaders.map(function(l){return l.total;})||[1]);
-
-        return(
-          <div style={{padding:'0 28px 16px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-
-            {/* ── CARRY-FORWARD PROGRESS ─────────────────────── */}
-            <div className="card" style={{padding:0}}>
-              <div className="card-head">
-                <h3 style={{display:'flex',alignItems:'center',gap:7}}>
-                  <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',display:'inline-block'}}/>
-                  Carry-Forward Backlog
-                </h3>
-                <span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>{cfPending} remaining</span>
-              </div>
-              <div style={{padding:'16px 18px'}}>
-                {/* Big progress arc */}
-                <div style={{display:'flex',alignItems:'center',gap:18,marginBottom:16}}>
-                  <svg width="90" height="90" viewBox="0 0 90 90" style={{flexShrink:0}}>
-                    <circle cx="45" cy="45" r="34" fill="none" stroke="var(--bg2)" strokeWidth="10"/>
-                    <circle cx="45" cy="45" r="34" fill="none"
-                      stroke={cfPct>=80?'#22C55E':cfPct>=50?'#F59E0B':'#EF4444'}
-                      strokeWidth="10" strokeLinecap="round"
-                      strokeDasharray={2*Math.PI*34}
-                      strokeDashoffset={2*Math.PI*34*(1-cfPct/100)}
-                      transform="rotate(-90 45 45)"
-                      style={{transition:'stroke-dashoffset .8s ease'}}/>
-                    <text x="45" y="41" textAnchor="middle" fontFamily="JetBrains Mono,monospace" fontWeight="900" fontSize="16"
-                      fill={cfPct>=80?'#4ADE80':cfPct>=50?'#FCD34D':'#FCA5A5'}>{cfPct}%</text>
-                    <text x="45" y="55" textAnchor="middle" fontFamily="Sora,sans-serif" fontWeight="600" fontSize="8"
-                      fill="var(--sub)">CLEARED</text>
-                  </svg>
-                  <div style={{flex:1}}>
-                    {[
-                      {l:'Total carried',v:cfTotal,c:'var(--info)'},
-                      {l:'Resolved',v:cfResolved,c:'#4ADE80'},
-                      {l:'Still open',v:cfPending,c:cfPending>0?'#FCA5A5':'#4ADE80'},
-                      {l:'Critical (14d+)',v:cfCrit,c:cfCrit>0?'#FCA5A5':'var(--sub)'},
-                    ].map(function(s){return(
-                      <div key={s.l} style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
-                        <span style={{font:'500 10px Sora,sans-serif',color:'var(--muted)'}}>{s.l}</span>
-                        <span style={{fontFamily:'JetBrains Mono,monospace',fontWeight:800,fontSize:12,color:s.c}}>{s.v}</span>
-                      </div>
-                    );})}
+                    </div>);})}
+                  <div style={{ borderTop: '1px solid var(--bsoft)', paddingTop: 9, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ font: '600 11px Sora,sans-serif', color: 'var(--muted)' }}>Resolution rate</span>
+                    <span style={{ font: "800 17px/1 'JetBrains Mono',monospace", color: '#4ADE80' }}>{rate}%</span>
                   </div>
                 </div>
-                {/* Progress bar */}
-                <div style={{height:8,background:'var(--bg2)',borderRadius:4,overflow:'hidden'}}>
-                  <div style={{width:cfPct+'%',height:8,background:cfPct>=80?'#22C55E':cfPct>=50?'#F59E0B':'#EF4444',borderRadius:4,transition:'width .8s ease'}}/>
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',marginTop:5}}>
-                  <span style={{font:'500 9px Sora,sans-serif',color:'var(--sub)'}}>0</span>
-                  <span style={{font:'600 9px Sora,sans-serif',color:'var(--muted)'}}>{cfResolved} of {cfTotal} cleared</span>
-                  <span style={{font:'500 9px Sora,sans-serif',color:'var(--sub)'}}>{cfTotal}</span>
-                </div>
               </div>
             </div>
-
-            {/* ── RESPONSIBLE PARTY LEADERBOARD ──────────────── */}
-            <div className="card" style={{padding:0}}>
-              <div className="card-head">
-                <h3 style={{display:'flex',alignItems:'center',gap:7}}>
-                  <span style={{width:8,height:8,borderRadius:'50%',background:'#818CF8',display:'inline-block'}}/>
-                  🎯 Resolution Leaderboard
-                </h3>
-                <span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>this month</span>
-              </div>
-              <div style={{padding:'14px 18px'}}>
-                {leaders.map(function(r,idx){
-                  var col=r.pct>=80?'#4ADE80':r.pct>=50?'#FCD34D':'#FCA5A5';
-                  var barW=Math.round(r.total/maxTotal*100);
-                  return(
-                    <div key={r.name} style={{marginBottom:10}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
-                        <div style={{display:'flex',alignItems:'center',gap:6}}>
-                          <span style={{fontFamily:'JetBrains Mono,monospace',fontWeight:700,fontSize:9,color:'var(--sub)',width:14}}>{idx+1}</span>
-                          <span style={{font:'600 11px/1 Sora,sans-serif',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:140}}>{r.name.split(' ').slice(0,2).join(' ')}</span>
-                        </div>
-                        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                          <span style={{fontFamily:'JetBrains Mono,monospace',fontWeight:700,fontSize:10,color:'var(--muted)'}}>{r.total}t</span>
-                          <span style={{fontFamily:'JetBrains Mono,monospace',fontWeight:800,fontSize:11,color:col,minWidth:32,textAlign:'right'}}>{r.pct}%</span>
-                        </div>
-                      </div>
-                      <div style={{height:5,background:'var(--bg2)',borderRadius:3,overflow:'hidden',display:'flex'}}>
-                        <div style={{width:(r.res/Math.max(r.total,1)*100)+'%',background:'#22C55E',transition:'width .6s'}}/>
-                        <div style={{width:(r.prg/Math.max(r.total,1)*100)+'%',background:'#F59E0B'}}/>
+            <div className="card">
+              <div className="card-head"><h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F97316', display: 'inline-block' }} />By Category</h3><span style={{ font: '600 10px Sora,sans-serif', color: 'var(--muted)' }}>{byCat2.length} active</span></div>
+              <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+                {byCat2.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', font: '500 12px Sora,sans-serif' }}>No tickets yet.</div>}
+                {byCat2.map(function (c) {return (
+                    <div key={c.cat}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ font: '600 11px/1 Sora,sans-serif', color: 'var(--text)' }}>{c.cat.split('/')[0].trim()}</span>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <span style={{ font: "600 10px/1 'JetBrains Mono',monospace", color: 'var(--okb)' }}>{c.res}✓</span>
+                        <span style={{ font: "700 11px/1 'JetBrains Mono',monospace", color: 'var(--text)', minWidth: 22, textAlign: 'right' }}>{c.total}</span>
                       </div>
                     </div>
-                  );
-                })}
-                <div style={{display:'flex',gap:12,marginTop:10,borderTop:'1px solid var(--bsoft)',paddingTop:8}}>
-                  {[{c:'#22C55E',l:'Resolved'},{c:'#F59E0B',l:'In Progress'},{c:'#EF4444',l:'Unresolved'}].map(function(s){return(
-                    <div key={s.l} style={{display:'flex',alignItems:'center',gap:4}}>
-                      <div style={{width:7,height:7,borderRadius:2,background:s.c}}/>
-                      <span style={{font:'500 9px Sora,sans-serif',color:'var(--muted)'}}>{s.l}</span>
-                    </div>
-                  );})}
-                </div>
-              </div>
-            </div>
-
-          </div>
-        );
-      })()}
-
-      {/* BODY */}
-      <div style={{padding:'0 28px 18px',display:'grid',gridTemplateColumns:'1fr 360px',gap:16}}>
-        {/* Today's quick list */}
-        <div className="card">
-          <div className="card-head"><h3>Today's Tickets — Day {watDayNow()}</h3><span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>{today.length} logged</span></div>
-          <div style={{maxHeight:280,overflowY:'auto'}}>
-            {today.length===0&&<div style={{padding:'32px',textAlign:'center',color:'var(--muted)',font:'500 12px Sora,sans-serif'}}>No tickets for today yet.</div>}
-            {today.slice(0,20).map(function(t){return(
-              <div key={t.id} style={{padding:'9px 16px',borderBottom:'1px solid var(--bsoft)',display:'flex',alignItems:'center',gap:10}}>
-                <span style={{font:"700 11px/1 'JetBrains Mono',monospace",color:'var(--info)',flexShrink:0}}>#{t.num}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{font:'600 11px/1 Sora,sans-serif',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</div>
-                  <div style={{font:'500 10px/1 Sora,sans-serif',color:'var(--muted)',marginTop:2}}>{t.time} · {t.category&&t.category.split('/')[0].trim()} · <span style={{color:'var(--sub)'}}>{t.agent||'—'}</span></div>
-                </div>
-                <StatusBadge s={t.status}/>
-              </div>);})}</div></div>
-
-        {/* Right column */}
-        <div style={{display:'flex',flexDirection:'column',gap:16}}>
-          {/* Donut */}
-          <div className="card">
-            <div className="card-head"><h3>Status Split</h3><span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>{all} total</span></div>
-            <div style={{padding:'16px',display:'flex',alignItems:'center',gap:16}}>
-              <DonutChart resolved={res} progress={prg} unresolved={unr}/>
-              <div style={{flex:1}}>
-                {[{label:'Resolved',v:res,c:'#22C55E'},{label:'In Progress',v:prg,c:'#F59E0B',sub:carryPrg>0?'+'+carryPrg+' carried':null},{label:'Unresolved',v:unr,c:'#EF4444',sub:carryUnr>0?'+'+carryUnr+' carried':null}].map(function(s){var total=res+prg+unr||1;return(
-                  <div key={s.label} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                    <div style={{width:9,height:9,borderRadius:'50%',background:s.c,flexShrink:0,boxShadow:'0 0 6px '+s.c}}/>
-                    <div style={{flex:1}}>
-                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                        <span style={{font:'600 11px/1 Sora,sans-serif',color:'var(--text)'}}>{s.label}{s.sub&&<span style={{font:'500 9px Sora,sans-serif',color:'#F59E0B',marginLeft:4}}>{s.sub}</span>}</span>
-                        <span style={{font:"700 11px/1 'JetBrains Mono',monospace",color:s.c}}>{s.v}</span>
-                      </div>
-                      <div style={{height:3,background:'rgba(255,255,255,.06)',borderRadius:3}}>
-                        <div style={{height:3,width:(Math.round(s.v/total*100))+'%',background:s.c,borderRadius:3,transition:'width .6s'}}/>
-                      </div>
+                    <div style={{ height: 8, background: 'rgba(255,255,255,.06)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ height: 8, width: Math.round(c.total / maxCat2 * 100) + '%', background: c.color, borderRadius: 4, transition: 'width .6s' }} />
                     </div>
                   </div>);})}
-                <div style={{borderTop:'1px solid var(--bsoft)',paddingTop:8,display:'flex',justifyContent:'space-between'}}>
-                  <span style={{font:'600 11px Sora,sans-serif',color:'var(--muted)'}}>Resolution rate</span>
-                  <span style={{font:"800 15px/1 'JetBrains Mono',monospace",color:'#4ADE80'}}>{rate}%</span>
-                </div>
-                {carry.length>0&&<div style={{marginTop:6,font:'500 9px Sora,sans-serif',color:'var(--sub)',borderTop:'1px solid var(--bsoft)',paddingTop:6}}>Includes {carry.length} pending ticket{carry.length!==1?'s':''} carried from prior month</div>}
               </div>
             </div>
-          </div>
+          </div>);
 
-          {/* Today's tickets */}
-          <div className="card" style={{flex:1}}>
-            <div className="card-head"><h3>Today's Tickets</h3><span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>{today.length} logged</span></div>
-            <div style={{maxHeight:220,overflowY:'auto'}}>
-              {today.length===0&&<div style={{padding:'24px',textAlign:'center',color:'var(--muted)',font:'500 12px Sora,sans-serif'}}>No tickets logged today yet.</div>}
-              {today.slice(0,12).map(function(t){return(
-                <div key={t.id} style={{padding:'9px 16px',borderBottom:'1px solid var(--bsoft)',display:'flex',alignItems:'center',gap:10}}>
-                  <span style={{font:"700 11px/1 'JetBrains Mono',monospace",color:'var(--info)',flexShrink:0}}>#{t.num}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{font:'600 11px/1 Sora,sans-serif',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</div>
-                    <div style={{font:'500 10px/1 Sora,sans-serif',color:'var(--muted)',marginTop:2}}>{t.time} · {t.category&&t.category.split('/')[0].trim()}</div>
-                  </div>
-                  <StatusBadge s={t.status}/>
-                </div>);})}
-            </div>
-          </div>
-        </div>
+      }()}
+
+      {/* WEEKLY ROSTER (bottom of dashboard) */}
+      <div style={{ padding: '16px 28px 0' }}>
+        <WeekScheduleGrid />
+      </div>
+
+      {/* BODY */}
+      <div style={{ padding: '0 28px 18px' }}>
+        {/* Today's quick list */}
+        <div className="card">
+          <div className="card-head"><h3>Today's Tickets — Day {watDayNow()}</h3><span style={{ font: '600 10px Sora,sans-serif', color: 'var(--muted)' }}>{today.length} logged</span></div>
+          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+            {today.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', font: '500 12px Sora,sans-serif' }}>No tickets for today yet.</div>}
+            {today.slice(0, 20).map(function (t) {return (
+                <div key={t.id} style={{ padding: '9px 16px', borderBottom: '1px solid var(--bsoft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ font: "700 11px/1 'JetBrains Mono',monospace", color: 'var(--info)', flexShrink: 0 }}>#{t.num}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ font: '600 11px/1 Sora,sans-serif', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
+                  <div style={{ font: '500 10px/1 Sora,sans-serif', color: 'var(--muted)', marginTop: 2 }}>{t.time} · {t.category && t.category.split('/')[0].trim()} · <span style={{ color: 'var(--sub)' }}>{t.agent || '—'}</span></div>
+                </div>
+                <StatusBadge s={t.status} />
+              </div>);})}</div></div>
       </div>
 
       {/* Responsible Parties */}
-      <div style={{padding:'0 28px 24px'}}>
+      <div style={{ padding: '0 28px 24px' }}>
         <div className="card">
-          <div className="card-head"><h3>🎯 Responsible Parties — Cumulative</h3><button onClick={function(){onNav('cumulative');}} className="btn btn-sm">Full view →</button></div>
-          <div style={{overflowX:'auto'}}>
+          <div className="card-head"><h3>🎯 Responsible Parties — Cumulative</h3><button onClick={function () {onNav('cumulative');}} className="btn btn-sm">Full view →</button></div>
+          <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead><tr><th>#</th><th>Party</th><th>Category</th><th>Today</th><th>Resolved</th><th>In Progress</th><th>Unresolved</th><th>Total</th><th>% Rate</th></tr></thead>
               <tbody>
-                {cum.filter(function(r){return r.grand>0;}).map(function(r){const col=r.pct>=80?'#4ADE80':r.pct>=50?'#FCD34D':'#F87171';return(
-                  <tr key={r.sn}>
-                    <td><Mono style={{color:'var(--muted)',fontSize:11}}>{r.sn}</Mono></td>
-                    <td style={{fontWeight:700}}>{r.name}</td>
-                    <td style={{color:'var(--muted)',fontSize:11}}>{r.cat}</td>
-                    <td><Mono style={{color:'var(--wnb)'}}>{r.todayCount}</Mono></td>
-                    <td><Mono style={{color:'var(--okb)'}}>{r.res}</Mono></td>
-                    <td><Mono style={{color:'var(--wnb)'}}>{r.prg||0}</Mono></td>
-                    <td><Mono style={{color:'var(--bdb)'}}>{r.unr||0}</Mono></td>
-                    <td><Mono style={{fontWeight:800}}>{r.grand}</Mono></td>
-                    <td><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:50,height:4,background:'rgba(255,255,255,.06)',borderRadius:3}}><div style={{width:r.pct+'%',height:4,background:col,borderRadius:3}}/></div><Mono style={{color:col,fontWeight:800,fontSize:11}}>{r.pct}%</Mono></div></td>
+                {cum.filter(function (r) {return r.grand > 0;}).map(function (r) {const col = r.pct >= 80 ? '#4ADE80' : r.pct >= 50 ? '#FCD34D' : '#F87171';return (
+                    <tr key={r.sn}>
+                    <td><Mono style={{ color: 'var(--muted)', fontSize: 11 }}>{r.sn}</Mono></td>
+                    <td style={{ fontWeight: 700 }}>{r.name}</td>
+                    <td style={{ color: 'var(--muted)', fontSize: 11 }}>{r.cat}</td>
+                    <td><Mono style={{ color: 'var(--wnb)' }}>{r.todayCount}</Mono></td>
+                    <td><Mono style={{ color: 'var(--okb)' }}>{r.res}</Mono></td>
+                    <td><Mono style={{ color: 'var(--wnb)' }}>{r.prg || 0}</Mono></td>
+                    <td><Mono style={{ color: 'var(--bdb)' }}>{r.unr || 0}</Mono></td>
+                    <td><Mono style={{ fontWeight: 800 }}>{r.grand}</Mono></td>
+                    <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 50, height: 4, background: 'rgba(255,255,255,.06)', borderRadius: 3 }}><div style={{ width: r.pct + '%', height: 4, background: col, borderRadius: 3 }} /></div><Mono style={{ color: col, fontWeight: 800, fontSize: 11 }}>{r.pct}%</Mono></div></td>
                   </tr>);})}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ── MONTHLY REPORT (replaces Daily Report) ────────────────────────
