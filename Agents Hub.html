@@ -473,13 +473,13 @@ function loadTix(id){
 // "My Tickets" + Slot Reports are scoped to the duty window via getDutyWindow().
 // "All Complaints" shows the full historical store for all agents.
 function fmtDay(t){
-  const d=String(t.created||t.received||'').slice(0,10);
+  const raw=t.created||t.received||t.receivedAt||t.createdAt||t.date||t.Date||t.dateCreated||t.receivedDate||t.Created||t.loggedAt||t.timestamp||t.Timestamp||'';
+  const d=String(raw).slice(0,10);
   if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){
     const[,m,dd]=d.split('-');
     const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m,10)-1]||'';
     return mn+' '+parseInt(dd,10);
   }
-  // Fix: use current WAT month so old "day-only" tickets show "May 26" not "Day 26"
   if(t.day&&t.day>0){
     const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
     const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]||'';

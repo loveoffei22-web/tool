@@ -562,13 +562,19 @@ function dedupTickets(existing,incoming){
 
 var stripEmoji=function(s){return(s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]+/gu,'').replace(/\s{2,}/g,' ').trim();};
 function fmtDay(t){
-  var d=String(t.created||t.received||'').slice(0,10);
+  var raw=t.created||t.received||t.receivedAt||t.createdAt||t.date||t.Date||t.dateCreated||t.receivedDate||t.Created||t.loggedAt||t.timestamp||t.Timestamp||'';
+  var d=String(raw).slice(0,10);
   if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){
     var p=d.split('-');
     var mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1],10)-1]||'';
     return mn+' '+parseInt(p[2],10);
   }
-  return(t.day&&t.day>0)?'Day '+t.day:'—';
+  if(t.day&&t.day>0){
+    var now=new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
+    var mn2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]||'';
+    return mn2+' '+t.day;
+  }
+  return '—';
 }
 function matchBU(val){var v=stripEmoji(val).trim().toUpperCase().replace(/\s+/g,' ');var exact=EK_BUS.find(function(b){return b.toUpperCase()===v;});if(exact)return exact;var partial=EK_BUS.find(function(b){return v.includes(b.toUpperCase())||b.toUpperCase().includes(v.split(' ')[0]);});return partial||null;}
 function parseSingle(txt){
