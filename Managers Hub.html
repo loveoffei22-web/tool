@@ -909,6 +909,91 @@ function ShiftBtns({agentId,shifts,onShift}){
 
 function ShiftPill({shift}){const m={day:{c:'#FCD34D',bg:'rgba(252,211,77,.15)',l:'☀ Day · 08:00–17:00'},night:{c:'#818CF8',bg:'rgba(129,140,248,.15)',l:'🌙 Night · 17:00–08:00'},off:{c:'#6B7280',bg:'rgba(107,114,128,.15)',l:'⊘ Off · Day Off'},leave:{c:'#34D399',bg:'rgba(52,211,153,.15)',l:'⛱ Leave'}};const v=m[shift]||m.off;return <span style={{display:'inline-flex',alignItems:'center',padding:'4px 10px',borderRadius:20,font:'700 11px/1 Sora,sans-serif',color:v.c,background:v.bg}}>{v.l}</span>;}
 
+
+function DashTrendChart({ series, xLabels, fullLabels, height }) {
+  const wrapRef = useRef(null);
+  const [hover, setHover] = useState(null);
+  const VBW = 1000,VBH = height || 340,PADL = 52,PADR = 28,PADT = 54,PADB = 46;
+  const n = xLabels.length;
+  const active = series.filter(function (s) {return s.on;});
+  const maxV = Math.max.apply(null, active.reduce(function (a, s) {return a.concat(s.data);}, [0]).concat([1]));
+  const niceMax = Math.max(4, Math.ceil(maxV / 4) * 4);
+  const xOf = function (i) {return n <= 1 ? PADL + (VBW - PADL - PADR) / 2 : PADL + i * (VBW - PADL - PADR) / (n - 1);};
+  const yOf = function (v) {return PADT + (1 - v / niceMax) * (VBH - PADT - PADB);};
+  function onMove(e) {
+    if (!wrapRef.current || n === 0) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    const vbx = (e.clientX - r.left) / r.width * VBW;
+    let idx = Math.round((vbx - PADL) / Math.max((VBW - PADL - PADR) / Math.max(n - 1, 1), 1));
+    setHover(Math.max(0, Math.min(n - 1, idx)));
+  }
+  const gridY = [0, .25, .5, .75, 1];
+  const skip = n > 15 ? Math.ceil(n / 10) : n > 8 ? 2 : 1;
+  const hx = hover != null ? xOf(hover) : 0;
+  const topY = hover != null ? Math.min.apply(null, active.map(function (s) {return yOf(s.data[hover]);}).concat([VBH])) : 0;
+  const bottom = VBH - PADB;
+  const legItemW = 138;
+  const legY = 22;
+  return (
+    <div className="trend-chart" ref={wrapRef} style={{ position: 'relative', width: '100%' }} onMouseMove={onMove} onMouseLeave={function () {setHover(null);}}>
+      <svg width="100%" viewBox={"0 0 " + VBW + " " + VBH} style={{ display: 'block', width: '100%', height: 'auto' }}>
+        {/* inline legend top-left */}
+        {active.map(function (s, i) {
+          var lx = PADL + i * legItemW;
+          return <g key={'leg' + s.key}>
+            <circle cx={lx + 5} cy={legY} r="5" fill={s.color} />
+            <line x1={lx + 13} y1={legY} x2={lx + 30} y2={legY} stroke={s.color} strokeWidth="2.5" />
+            <text className="leg-lbl" x={lx + 36} y={legY + 4.5} fill="rgba(255,255,255,.7)" fontSize="12.5" fontFamily="Sora,sans-serif" fontWeight="600">{s.label}</text>
+          </g>;
+        })}
+        {/* grid lines */}
+        {gridY.map(function (f, i) {var y = PADT + f * (VBH - PADT - PADB);return <line key={i} className="tgrid" x1={PADL} y1={y} x2={VBW - PADR} y2={y} stroke="rgba(255,255,255,.07)" strokeWidth="1" />;})}
+        {/* Y axis labels */}
+        {gridY.map(function (f, i) {var v = Math.round(niceMax * (1 - f));return <text key={'y' + i} x={PADL - 10} y={PADT + f * (VBH - PADT - PADB) + 4} textAnchor="end" fill="rgba(255,255,255,.38)" fontSize="12" fontFamily="JetBrains Mono,monospace">{v}</text>;})}
+        {/* X axis labels */}
+        {xLabels.map(function (l, i) {if (i % skip !== 0 && i !== n - 1) return null;return <text key={'x' + i} x={xOf(i)} y={VBH - 12} textAnchor="middle" fill="rgba(255,255,255,.4)" fontSize="12" fontFamily="Sora,sans-serif">{l}</text>;})}
+        {/* area fills */}
+        {active.map(function (s) {
+          var pts = s.data.map(function (v, i) {return xOf(i).toFixed(1) + ',' + yOf(v).toFixed(1);});
+          var poly = xOf(0).toFixed(1) + ',' + bottom + ' ' + pts.join(' ') + ' ' + xOf(n - 1).toFixed(1) + ',' + bottom;
+          return <polygon key={'a' + s.key} points={poly} fill={s.color} fillOpacity=".16" />;
+        })}
+        {/* hover crosshair */}
+        {hover != null && <line className="tgrid" x1={hx} y1={PADT} x2={hx} y2={bottom} stroke="rgba(255,255,255,.2)" strokeWidth="1" strokeDasharray="4 3" />}
+        {/* lines — glow + main */}
+        {active.map(function (s) {
+          var pts = s.data.map(function (v, i) {return xOf(i).toFixed(1) + ',' + yOf(v).toFixed(1);}).join(' ');
+          return <g key={s.key}>
+            <polyline points={pts} fill="none" stroke={s.color} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" opacity=".12" />
+            <polyline points={pts} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </g>;
+        })}
+        {/* dots */}
+        {n <= 40 && active.map(function (s) {return s.data.map(function (v, i) {return <circle key={s.key + 'd' + i} cx={xOf(i)} cy={yOf(v)} r="4.5" fill={s.color} stroke="var(--card)" strokeWidth="2" />;});})}
+        {/* hover dots */}
+        {hover != null && active.map(function (s) {return <circle key={'h' + s.key} cx={hx} cy={yOf(s.data[hover])} r="7" fill={s.color} stroke="var(--card)" strokeWidth="2.5" />;})}
+      </svg>
+      {hover != null && active.length > 0 && function () {
+        var leftPct = hx / VBW * 100,topPct = topY / VBH * 100;
+        return (
+          <div style={{ position: 'absolute', left: leftPct + '%', top: 'calc(' + topPct + '% - 14px)', transform: 'translate(-50%,-100%)', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', boxShadow: '0 10px 30px rgba(0,0,0,.5)', pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 5, minWidth: 120 }}>
+            <div style={{ font: '700 10px/1 Sora,sans-serif', color: 'var(--muted)', marginBottom: 8, letterSpacing: '.04em' }}>{fullLabels && fullLabels[hover] || xLabels[hover]}</div>
+            <div style={{ display: 'flex', gap: 14 }}>
+              {active.map(function (s) {return (
+                  <div key={s.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, boxShadow: '0 0 7px ' + s.color }} />
+                    <span style={{ font: "800 16px/1 'JetBrains Mono',monospace", color: '#fff' }}>{s.data[hover]}</span>
+                  </div>
+                  <span style={{ font: '600 9px/1 Sora,sans-serif', color: 'var(--muted)' }}>{s.label}</span>
+                </div>);})}
+            </div>
+          </div>);
+      }()}
+    </div>);
+
+}
+
 // ── DASHBOARD ──────────────────────────────────────────────────────
 const SLOTS=[{id:'9am',label:'9AM Handover',start:9,end:10},{id:'12pm',label:'12PM Update',start:12,end:13},{id:'cob',label:'4PM COB',start:16,end:17}];
 
