@@ -1857,6 +1857,7 @@ function AllComplaints({tickets,onUpdate,onBulkUpdate,onBatchUpdate,onDelete,sho
     }
   }
   const[bulkStatus,setBulkStatus]=useState('resolved');
+  const[bulkCat,setBulkCat]=useState('');
   const[page,setPage]=useState(0);
   const PAGE=100;
   const[showExportDlg,setShowExportDlg]=useState(false);
@@ -1964,6 +1965,14 @@ function AllComplaints({tickets,onUpdate,onBulkUpdate,onBatchUpdate,onDelete,sho
   function applyBulkStatus(){
     if(!selected.length)return;
     onBulkUpdate&&onBulkUpdate(selected,{status:bulkStatus});
+    setSelected([]);
+  }
+  function applyBulkCat(){
+    if(!selected.length||!bulkCat)return;
+    const patch={category:bulkCat};
+    const ar=EK_RESP.find(function(r){return r.cat===bulkCat;});
+    if(ar)patch.resp=ar.name;
+    onBulkUpdate&&onBulkUpdate(selected,patch);
     setSelected([]);
   }
   function clearSelection(){setSelected([]);}
@@ -2125,6 +2134,13 @@ function AllComplaints({tickets,onUpdate,onBulkUpdate,onBatchUpdate,onDelete,sho
               <option value="unresolved">✕ Unresolved</option>
             </select>
             <button onClick={applyBulkStatus} className="btn btn-gold btn-sm" style={{height:32,padding:'0 14px'}}>Apply</button>
+            <div style={{width:1,height:24,background:'rgba(255,255,255,.15)',margin:'0 4px'}}/>
+            <span style={{font:'600 11px Sora,sans-serif',color:'var(--muted)'}}>Set category:</span>
+            <select className="sel" style={{height:32,flex:'0 0 170px'}} value={bulkCat} onChange={function(e){setBulkCat(e.target.value);}}>
+              <option value="">— pick category —</option>
+              {EK_CATS.map(function(c){return <option key={c} value={c}>{c}</option>;})}
+            </select>
+            <button onClick={applyBulkCat} disabled={!bulkCat} className="btn btn-gold btn-sm" style={{height:32,padding:'0 14px',opacity:bulkCat?1:.45}}>Apply</button>
             <div style={{width:1,height:24,background:'rgba(255,255,255,.15)',margin:'0 4px'}}/>
             <button onClick={function(){autoAssignResp(selected);}} style={{height:32,padding:'0 14px',background:'rgba(99,102,241,.25)',color:'var(--infob)',border:'1px solid rgba(99,102,241,.4)',borderRadius:7,font:'800 10px Sora,sans-serif',cursor:'pointer'}}>
               🧠 Auto-assign Resp.
