@@ -413,6 +413,19 @@ var EK_AGENTS=[
   {id:'esther', name:'Esther Okafor',    email:'esther.okafor@ekedp.com',    color:'#DC2626',tint:'rgba(220,38,38,.18)', initials:'EO',role:'CX Agent'},
   {id:'loveth', name:'Loveth Okpara',    email:'loveth.okpara@ekedp.com',    color:'#F59E0B',tint:'rgba(245,158,11,.18)',initials:'LO',role:'CX Agent'},
 ];
+var EK_AGENTS_KEY='ek_v3_agents';
+var EK_AGENTS_DEFAULTS=EK_AGENTS.slice();
+function loadAgents(){
+  try{
+    var s=localStorage.getItem(EK_AGENTS_KEY);
+    if(s){var arr=JSON.parse(s);if(Array.isArray(arr)&&arr.length){EK_AGENTS.length=0;arr.forEach(function(a){EK_AGENTS.push(a);});return;}}
+  }catch(e){}
+}
+function saveAgents(arr){
+  try{localStorage.setItem(EK_AGENTS_KEY,JSON.stringify(arr));}catch(e){}
+  EK_AGENTS.length=0;arr.forEach(function(a){EK_AGENTS.push(a);});
+}
+loadAgents();
 var EK_BUS=['ISLAND','IJORA','MUSHIN','AJAH','LEKKI','APAPA','AGBARA','AJELE','OJO','FESTAC','ORILE','IBEJU-LEKKI'];
 var EK_RESP_DEFAULTS=[
   {sn:1,name:'Holyland Umude',         cat:'Metering',                       color:'#60A5FA'},
@@ -4291,29 +4304,106 @@ function Agents({tickets,shifts,onShift,showToast}){
     };
     reader.readAsText(file);
   }
-  function clearOverrides(){EK_AGENTS.forEach(function(a){onShift(a.id,a.id==='matthew'?'day':a.id==='loveth'?'day':'off');});showToast('Overrides cleared.');}
+  const[agentList,setAgentList]=useState(EK_AGENTS.slice());
+  const[editAgent,setEditAgent]=useState(null);
+  const[showAddAgent,setShowAddAgent]=useState(false);
+  const AGENT_COLORS=['#16A34A','#EC4899','#8B5CF6','#DC2626','#F59E0B','#3B82F6','#06B6D4','#F97316','#A855F7','#EF4444'];
+
+  function openEditAgent(a,idx){
+    setEditAgent({idx,id:a.id,name:a.name,email:a.email||'',role:a.role||'CX Agent',color:a.color||'#60A5FA'});
+  }
+  function saveEditAgent(){
+    if(!editAgent)return;
+    var nm=editAgent.name.trim();if(!nm){showToast('Name is required','error');return;}
+    var arr=agentList.slice();
+    var idx=editAgent.idx;
+    var id=nm.split(' ')[0].toLowerCase().replace(/[^a-z]/g,'');
+    arr[idx]=Object.assign({},arr[idx],{
+      id:editAgent.idx<0?id:arr[idx].id,
+      name:nm,email:editAgent.email.trim(),role:editAgent.role.trim()||'CX Agent',
+      color:editAgent.color,
+      tint:editAgent.color+'2e',
+      initials:(nm.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase())
+    });
+    saveAgents(arr);setAgentList(arr);setEditAgent(null);showToast('Agent updated ✅');
+  }
+  function deleteAgent(idx){
+    if(!confirm('Remove this agent from the roster? Their ticket data is not deleted.'))return;
+    var arr=agentList.filter(function(_,i){return i!==idx;});
+    saveAgents(arr);setAgentList(arr);setEditAgent(null);showToast('Agent removed');
+  }
+  function addAgent(){
+    var nm=(editAgent&&editAgent.name||'').trim();if(!nm){showToast('Name is required','error');return;}
+    var id=nm.split(' ')[0].toLowerCase().replace(/[^a-z]/g,'');
+    var taken=agentList.some(function(a){return a.id===id;});
+    if(taken)id=id+(agentList.length+1);
+    var col=editAgent.color||AGENT_COLORS[agentList.length%AGENT_COLORS.length];
+    var newA={id,name:nm,email:(editAgent.email||'').trim(),role:(editAgent.role||'CX Agent').trim(),color:col,tint:col+'2e',initials:(nm.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase())};
+    var arr=agentList.concat([newA]);
+    saveAgents(arr);setAgentList(arr);setEditAgent(null);setShowAddAgent(false);showToast('Agent added ✅');
+  }
+  function importRosterCSV(e){
+    const file=e.target.files[0];if(!file)return;e.target.value='';
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const raw=ev.target.result.replace(/^﻿/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+        const lines=raw.split('\n').filter(function(l){return l.trim();});
+        if(lines.length<2){showToast('CSV needs a header row + data','error');return;}
+        function parseLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++){var ch=line[i];if(ch==='"'){q=!q;}else if(ch===','&&!q){r.push(c.trim());c='';}else{c+=ch;}}r.push(c.trim());return r;}
+        const header=parseLine(lines[0]).map(function(h){return h.toLowerCase().replace(/"/g,'').trim();});
+        var iName=header.findIndex(function(h){return h.includes('name');});
+        var iEmail=header.findIndex(function(h){return h.includes('email')||h.includes('mail');});
+        var iRole=header.findIndex(function(h){return h.includes('role')||h.includes('title')||h.includes('position');});
+        if(iName<0){showToast('CSV must have a Name column','error');return;}
+        var arr=agentList.slice();var added=0,updated=0;
+        lines.slice(1).forEach(function(line){
+          var cols=parseLine(line);
+          var nm=(cols[iName]||'').replace(/"/g,'').trim();if(!nm)return;
+          var email=iEmail>=0?(cols[iEmail]||'').replace(/"/g,'').trim():'';
+          var role=iRole>=0?(cols[iRole]||'').replace(/"/g,'').trim():'CX Agent';
+          var id=nm.split(' ')[0].toLowerCase().replace(/[^a-z]/g,'');
+          var existing=arr.findIndex(function(a){return a.name.toLowerCase()===nm.toLowerCase()||a.id===id;});
+          var col=AGENT_COLORS[arr.length%AGENT_COLORS.length];
+          if(existing>=0){arr[existing]=Object.assign({},arr[existing],{name:nm,email:email||arr[existing].email,role:role||arr[existing].role});updated++;}
+          else{arr.push({id,name:nm,email,role,color:col,tint:col+'2e',initials:nm.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase()});added++;}
+        });
+        saveAgents(arr);setAgentList(arr);
+        showToast('✅ Roster imported — '+added+' added, '+updated+' updated');
+      }catch(err){showToast('CSV error: '+err.message,'error');}
+    };
+    reader.readAsText(file);
+  }
+  function clearOverrides(){agentList.forEach(function(a){onShift(a.id,'off');});showToast('Overrides cleared.');}
   return(
     <div>
       <div className="hero" style={{padding:'18px 28px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
             <div style={{font:'800 20px/1 Sora,sans-serif',color:'#fff',marginBottom:4}}>👥 Agents</div>
-            <div style={{font:'500 12px Sora,sans-serif',color:'var(--muted)'}}>{new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'})).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · {onCount} on shift · {EK_AGENTS.length-onCount} off</div>
+            <div style={{font:'500 12px Sora,sans-serif',color:'var(--muted)'}}>{new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'})).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · {onCount} on shift · {agentList.length-onCount} off</div>
           </div>
-          <div style={{display:'flex',gap:8}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             <button className="btn btn-danger btn-sm" onClick={clearOverrides}>{Ico.x}&nbsp;Clear Overrides</button>
-            <label className="btn btn-sm" style={{cursor:'pointer'}}>{Ico.upload}&nbsp;Import Roster CSV<input type="file" accept=".csv" style={{display:'none'}} onChange={importCSV}/></label>
+            <label className="btn btn-sm" style={{cursor:'pointer'}}>{Ico.upload}&nbsp;Import Roster CSV
+              <input type="file" accept=".csv" style={{display:'none'}} onChange={importRosterCSV}/>
+            </label>
+            <label className="btn btn-sm" style={{cursor:'pointer',background:'rgba(99,102,241,.15)',borderColor:'rgba(99,102,241,.4)',color:'var(--infob)'}}>{Ico.upload}&nbsp;Import Schedule CSV
+              <input type="file" accept=".csv" style={{display:'none'}} onChange={importCSV}/>
+            </label>
+            <button className="btn btn-gold btn-sm" onClick={function(){setEditAgent({idx:-1,id:'',name:'',email:'',role:'CX Agent',color:AGENT_COLORS[agentList.length%AGENT_COLORS.length]});setShowAddAgent(true);}}>+ Add Agent</button>
           </div>
         </div>
       </div>
       <div style={{padding:'18px 28px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-          {EK_AGENTS.map(function(a){
+          {agentList.map(function(a,idx){
             var myTix=today.filter(function(t){return t.agent===a.id||t.agentId===a.id||(t.agentName||'').toLowerCase()===a.name.toLowerCase();});
             var res=myTix.filter(function(t){return t.status==='resolved';}).length;
             var rate=myTix.length?Math.round(res/myTix.length*100):0;
             return(
-              <div key={a.id} className="agent-card" style={{borderColor:a.color+'44'}}>
+              <div key={a.id} className="agent-card" style={{borderColor:a.color+'44',position:'relative'}}>
+                <button onClick={function(){openEditAgent(a,idx);}} style={{position:'absolute',top:10,right:10,background:'rgba(255,255,255,.08)',border:'1px solid var(--bsoft)',borderRadius:7,color:'var(--muted)',font:'700 10px Sora,sans-serif',cursor:'pointer',padding:'4px 9px'}}>✏ Edit</button>
                 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
                   <AgentPhoto id={a.id} name={a.name} color={a.color} size={48}/>
                   <div style={{flex:1,minWidth:0}}>
@@ -4333,6 +4423,44 @@ function Agents({tickets,shifts,onShift,showToast}){
               </div>);})}
         </div>
       </div>
+      {editAgent&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.65)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={function(){setEditAgent(null);setShowAddAgent(false);}}>
+          <div style={{background:'var(--surface)',borderRadius:14,width:'min(440px,94vw)',padding:28,boxShadow:'0 24px 80px rgba(0,0,0,.6)'}} onClick={function(e){e.stopPropagation();}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <span style={{font:'800 15px Sora,sans-serif',color:'var(--text)'}}>{showAddAgent?'➕ Add Agent':'✏️ Edit Agent'}</span>
+              <button onClick={function(){setEditAgent(null);setShowAddAgent(false);}} style={{background:'transparent',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer'}}>✕</button>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label className="lbl">Full Name *</label>
+              <input className="inp" value={editAgent.name} onChange={function(e){setEditAgent(function(p){return Object.assign({},p,{name:e.target.value});});}} placeholder="e.g. John Doe"/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label className="lbl">Email</label>
+              <input className="inp" type="email" value={editAgent.email} onChange={function(e){setEditAgent(function(p){return Object.assign({},p,{email:e.target.value});});}} placeholder="john.doe@ekedp.com"/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label className="lbl">Role</label>
+              <select className="sel" value={editAgent.role} onChange={function(e){setEditAgent(function(p){return Object.assign({},p,{role:e.target.value});});}}>
+                <option>Team Lead</option><option>CX Agent</option><option>Supervisor</option><option>Manager</option>
+              </select>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label className="lbl">Colour</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:6}}>
+                {AGENT_COLORS.map(function(c){return(
+                  <button key={c} onClick={function(){setEditAgent(function(p){return Object.assign({},p,{color:c});});}} style={{width:28,height:28,borderRadius:'50%',background:c,border:editAgent.color===c?'3px solid #fff':'2px solid transparent',cursor:'pointer',outline:'none'}}/>
+                );})}
+                <input type="color" value={editAgent.color} onChange={function(e){setEditAgent(function(p){return Object.assign({},p,{color:e.target.value});});}} style={{width:28,height:28,borderRadius:'50%',border:'2px solid var(--bsoft)',cursor:'pointer',padding:0}} title="Custom colour"/>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={showAddAgent?addAgent:saveEditAgent} style={{flex:1,padding:'12px',background:'var(--ek-gold)',color:'#0A1A4F',border:'none',borderRadius:9,font:'800 13px Sora,sans-serif',cursor:'pointer'}}>{showAddAgent?'Add Agent':'Save Changes'}</button>
+              {!showAddAgent&&<button onClick={function(){deleteAgent(editAgent.idx);}} style={{padding:'12px 16px',background:'rgba(239,68,68,.15)',color:'#F87171',border:'1px solid rgba(239,68,68,.35)',borderRadius:9,font:'800 12px Sora,sans-serif',cursor:'pointer'}}>Remove</button>}
+              <button onClick={function(){setEditAgent(null);setShowAddAgent(false);}} style={{padding:'12px 16px',background:'transparent',color:'var(--muted)',border:'1px solid var(--bsoft)',borderRadius:9,font:'700 12px Sora,sans-serif',cursor:'pointer'}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
