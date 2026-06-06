@@ -780,14 +780,16 @@ function CarryForwardBanner({ agent, allTix }) {
 
 }
 
-function Dashboard({ agent, allTix, shifts }) {
+function Dashboard({ agent, allTix, shifts, activeMonth }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [view, setView] = useState('month'); // 'today' | 'month'
   const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
   const h = watNow.getHours();
   const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   const greetE = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
-  const monthStr = watNow.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  // Derive monthStr from activeMonth (e.g. "2026-05") not from today
+  const _amDate = activeMonth ? new Date(activeMonth + '-01') : watNow;
+  const monthStr = _amDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
   // Week calendar
   const today = new Date(watNow);today.setHours(0, 0, 0, 0);
@@ -808,13 +810,10 @@ function Dashboard({ agent, allTix, shifts }) {
 
   // Per-agent stats
   function getAgentStats(a) {
-    // MTD: all tickets this calendar month
-    const monthStart = new Date(watNow.getFullYear(), watNow.getMonth(), 1);
+    // MTD: all tickets in the selected activeMonth
     const mtdTix = allTix.filter(function (t) {
       if ((t.agent || '') !== a.id) return false;
-      const d = new Date(t.created || t.receivedAt || '');
-      if (isNaN(d.getTime())) return false;
-      return d >= monthStart;
+      return shiftWatYM(t) === activeMonth;
     });
     // Today: tickets created today in WAT
     const todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth() + 1).padStart(2, '0') + '-' + String(watNow.getDate()).padStart(2, '0');
@@ -1046,7 +1045,7 @@ function shiftWatDate(t) {
     var d = new Date(raw);
     if (isNaN(d.getTime())) {
       var dm = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (dm) d = new Date(dm[3] + '-' + dm[2].padStart(2, '0') + '-' + dm[1].padStart(2, '0'));
+      if (dm) d = new Date(dm[3] + '-' + dm[1].padStart(2, '0') + '-' + dm[2].padStart(2, '0'));
       if (isNaN(d.getTime())) return null;
     }
     var wat = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
@@ -1055,7 +1054,7 @@ function shiftWatDate(t) {
 }
 function shiftWatYM(t) {var d = shiftWatDate(t);return d ? d.slice(0, 7) : null;}
 // Shift schedule (WAT):
-// Saturday   : Sat 10:00 → Sat 16:00
+// Saturday   : Fri 17:01 → Sat 16:00
 // Sunday     : Sat 16:01 → Sun 16:00
 // Monday     : Sun 16:01 → Mon 17:00
 // Tue–Fri    : prev day 17:01 → today 17:00  (5:01 PM counts as next day)
@@ -1064,8 +1063,9 @@ function getDutyWindow(agentShift) {
   var dow = now.getDay(); // 0=Sun,1=Mon…6=Sat
   var todayBase = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var start, end;
-  if (dow === 6) {// Saturday: 10:00 → 16:00
-    start = new Date(todayBase.getFullYear(), todayBase.getMonth(), todayBase.getDate(), 10, 0, 0);
+  if (dow === 6) {// Saturday: Fri 17:01 → Sat 16:00
+    var fri = new Date(todayBase);fri.setDate(fri.getDate() - 1);
+    start = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate(), 17, 1, 0);
     end = new Date(todayBase.getFullYear(), todayBase.getMonth(), todayBase.getDate(), 16, 0, 0);
   } else if (dow === 0) {// Sunday: Sat 16:01 → Sun 16:00
     var sat = new Date(todayBase);sat.setDate(sat.getDate() - 1);
@@ -1598,6 +1598,7 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
                   <th style={{ width: 36, padding: '8px 6px' }}>
                     <input type="checkbox" checked={allPagedSelected} onChange={toggleAll} style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--ek-gold)' }} />
                   </th>
+                  <th style={{ width: 32, padding: '8px 6px', color: 'var(--muted)', font: '700 9px/1 Sora,sans-serif', textTransform: 'uppercase' }}>#</th>
                   <th><HeadFilter label="Date" colKey="date" value={sort} setValue={setSort} activeOverride={sort !== 'newest' || !!fFrom || !!fTo}
                     extra={<div onClick={function (e) {e.stopPropagation();}} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Filter by date</div>
@@ -2186,6 +2187,8 @@ function ImportJSON({ agent, tickets, setTickets, showToast }) {
     });
     const brandNew = preview.tickets.filter(function (t) {return !existingNums.has(String(t.num || ''));});
     const merged = [...updated, ...brandNew];
+    // Write to shared global store so all agents see imported tickets
+    try {localStorage.setItem('ek_v2_tickets', JSON.stringify(merged));} catch (e) {}
     setTickets(merged);
     showToast('✓ ' + brandNew.length + ' new · ' + updatedNums.size + ' updated · ' + (preview.tickets.length - brandNew.length - updatedNums.size) + ' skipped.');
     setPreview(null);
@@ -2736,7 +2739,10 @@ function DataScreen({ agent, tickets, setTickets, showToast, agentShift }) {
   function processFile(file) {const reader = new FileReader();reader.onload = function (e) {try {const data = JSON.parse(e.target.result);let imported = [];if (Array.isArray(data)) {imported = data;} else if (Array.isArray(data.tickets)) {imported = data.tickets;} else if (Array.isArray(data.days)) {data.days.forEach(function (day) {(day.tickets || []).forEach(function (t) {imported.push(t);});});} else {Object.keys(data).forEach(function (k) {if (k.charAt(0) !== '_' && Array.isArray(data[k])) data[k].forEach(function (t) {imported.push(t);});});}if (!imported.length) throw new Error('No tickets found');setPreview({ count: imported.length, by: data.exportedBy, tickets: imported });} catch (err) {showToast('Invalid JSON: ' + err.message, 'error');}};reader.readAsText(file);}
   function confirmImport() {if (!preview) return;
     const r = dedupTickets(tickets, preview.tickets);
-    setTickets([...r.merged, ...r.kept]);
+    const merged = [...r.merged, ...r.kept];
+    // Write to shared global store (not per-agent) so all agents see the imported tickets
+    try {localStorage.setItem('ek_v2_tickets', JSON.stringify(merged));} catch (e) {}
+    setTickets(merged);
     showToast('Imported ' + r.kept.length + ' new' + (r.updated > 0 ? ' · ' + r.updated + ' updated' : '') + (r.dropped > 0 ? ' · ' + r.dropped + ' duplicate' + (r.dropped > 1 ? 's' : '') + ' skipped' : '') + ' ✓');
     setPreview(null);
   }
@@ -3004,7 +3010,10 @@ function App() {
   var availMonths = Array.from(_agtMonthSet).sort();
   // Auto-snap to latest month whenever new ticket data arrives
   var _latestYM = function () {var max = '';allTix.forEach(function (t) {var ym = shiftWatYM(t);if (ym && ym > max) max = ym;});return max || currentYM;}();
+  var _hasSnapped = React.useRef(false);
   React.useEffect(function () {
+    if (_hasSnapped.current) return;
+    _hasSnapped.current = true;
     setActiveMonth(_latestYM);
     localStorage.setItem('ek_active_month', _latestYM);
   }, [_latestYM]);
@@ -3091,7 +3100,7 @@ function App() {
 
   const agentShift = shifts[agent.id] || 'day';
   const screens = {
-    dashboard: <Dashboard agent={agent} allTix={viewTix} shifts={shifts} />,
+    dashboard: <Dashboard agent={agent} allTix={viewTix} shifts={shifts} activeMonth={activeMonth} />,
     all: <AllComplaints agent={agent} allTix={viewTix} onUpdate={onUpdateAllTix} onDelete={onDeleteAllTix} onDeleteBulk={onDeleteBulkAllTix} showToast={showToast} />,
     tickets: <TicketsScreen agent={agent} tickets={tickets} allTix={viewTix} onEdit={onEdit} onUpdate={onUpdateAllTix} onDelete={onDeleteAllTix} showToast={showToast} agentShift={agentShift} onCreate={onCreate} />,
     slot: <SlotReport agent={agent} tickets={tickets} showToast={showToast} agentShift={agentShift} />,
