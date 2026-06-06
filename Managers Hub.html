@@ -795,7 +795,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ── DUTY WINDOW ─────────────────────────────────────────────
 // Shift schedule (WAT):
-// Saturday: Sat 10:00 → Sat 16:00
+// Saturday: Fri 17:01 → Sat 16:00
 // Sunday  : Sat 16:01 → Sun 16:00
 // Monday  : Sun 16:01 → Mon 17:00
 // Tue–Fri : prev day 17:01 → today 17:00  (5:01 PM = next day)
@@ -804,8 +804,9 @@ function getDutyWindow() {
   var dow = now.getDay();
   var todayBase = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var start, end;
-  if (dow === 6) {// Saturday: 10:00 → 16:00
-    start = new Date(todayBase.getFullYear(), todayBase.getMonth(), todayBase.getDate(), 10, 0, 0);
+  if (dow === 6) {// Saturday: Fri 17:01 → Sat 16:00
+    var fri = new Date(todayBase);fri.setDate(fri.getDate() - 1);
+    start = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate(), 17, 1, 0);
     end = new Date(todayBase.getFullYear(), todayBase.getMonth(), todayBase.getDate(), 16, 0, 0);
   } else if (dow === 0) {// Sunday: Sat 16:01 → Sun 16:00
     var sat = new Date(todayBase);sat.setDate(sat.getDate() - 1);
@@ -989,7 +990,7 @@ const NAV_GROUPS = [
 { label: 'Operations', items: [{ id: 'dashboard', icon: 'dash', label: 'Dashboard' }, { id: 'all', icon: 'all', label: 'All Complaints' }] },
 { label: 'Reports', items: [{ id: 'daily', icon: 'daily', label: 'Monthly Report' }, { id: 'rpt_verify', icon: 'all', label: 'Verify' }, { id: 'rpt_anomaly', icon: 'analy', label: 'Anomaly' }, { id: 'rpt_executive', icon: 'cum', label: 'Executive' }, { id: 'rpt_weekly', icon: 'daily', label: 'Weekly' }, { id: 'rpt_monthly', icon: 'report', label: 'Monthly' }] },
 { label: 'Insights', items: [{ id: 'slot', icon: 'report', label: 'Slot Report', badge: 'NEW' }] },
-{ label: 'Team', items: [{ id: 'sync', icon: 'sync', label: 'Cloud Sync' }, { id: 'data', icon: 'report', label: 'Import / Export' }] }];
+{ label: 'Team', items: [{ id: 'agents', icon: 'agents', label: 'Agents & Roster' }, { id: 'sync', icon: 'sync', label: 'Cloud Sync' }, { id: 'data', icon: 'report', label: 'Import / Export' }] }];
 
 
 function Nav({ active, onChange, collapsed, onToggle, onSettings, onSignOut, onReset, user, activeMonth, setActiveMonth, availMonths, currentYM, tickets, readOnly }) {
@@ -2929,7 +2930,7 @@ function SmoothLineChart({ series, xLabels, fullLabels, height }) {
 }
 
 // ── ANALYTICS DASHBOARD (new) ─────────────────────────────────────
-function AnalyticsDash({ tickets, onNav, signedInName, onSettings }) {
+function AnalyticsDash({ tickets, onNav, signedInName, onSettings, activeMonth }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {const id = setInterval(() => setNow(new Date()), 1000);return () => clearInterval(id);}, []);
   const wat = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
@@ -3066,7 +3067,7 @@ function AnalyticsDash({ tickets, onNav, signedInName, onSettings }) {
       {/* MONTHLY ROSTER (below line chart) */}
       <div style={{ padding: '16px 28px 0' }}>
         <div style={{ font: '700 10px/1 Sora,sans-serif', color: 'var(--ek-gold)', letterSpacing: '.18em', textTransform: 'uppercase', margin: '4px 2px 12px' }}>📅 Team Roster</div>
-        <WeekScheduleGrid />
+        <WeekScheduleGrid activeMonth={activeMonth} />
       </div>
 
       {/* STATUS SPLIT + BY CATEGORY */}
@@ -4971,9 +4972,93 @@ function DataPage({ tickets, setTickets, showToast }) {
 }
 
 // ── AGENTS / ROSTER ────────────────────────────────────────────────
-function Agents({ tickets, shifts, onShift, showToast }) {
-  const watTodayFull = watTodayStr();const today = tickets.filter(function (t) {if (t.created) {var d = new Date(t.created);if (!isNaN(d.getTime())) {var w = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));var ds = w.getFullYear() + '-' + String(w.getMonth() + 1).padStart(2, '0') + '-' + String(w.getDate()).padStart(2, '0');return ds === watTodayFull;}}if (t.day && t.day > 0) {return t.day === watDayNow() && String(t.created || '').startsWith(watTodayFull.slice(0, 7));}return false;});
+function Agents({ tickets, shifts, onShift, showToast, activeMonth }) {
+  // tickets is already viewTickets (filtered to activeMonth) — use all for MTD stats
   const onCount = Object.values(shifts).filter(function (s) {return s === 'day' || s === 'night';}).length;
+  const rosterFileRef = useRef(null);
+  const [rosterPreview, setRosterPreview] = useState(null);
+
+  // Map CSV ShiftType to app shift id
+  function mapShiftType(s) {
+    var v = (s || '').toLowerCase().trim();
+    if (v === 'day') return 'day';
+    if (v === 'night') return 'shadow';
+    if (v === 'onleave') return 'leave';
+    return 'off';
+  }
+  // Map AgentName/FolderName to agent id
+  function mapAgentId(row) {
+    var folder = (row['FolderName'] || '').toUpperCase();
+    if (folder.startsWith('MATT')) return 'matthew';
+    if (folder.startsWith('ROG'))  return 'racheal';
+    if (folder.startsWith('TEG'))  return 'tomina';
+    if (folder.startsWith('EST'))  return 'esther';
+    if (folder.startsWith('LUV'))  return 'loveth';
+    return null;
+  }
+  function parseRosterCSV(text) {
+    var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(function (l) {return l.trim();});
+    if (!lines.length) return null;
+    // Parse CSV line respecting quoted fields
+    function parseLine(line) {
+      var result = []; var cur = ''; var inQ = false;
+      for (var i = 0; i < line.length; i++) {
+        var c = line[i];
+        if (c === '"') {inQ = !inQ;}
+        else if (c === ',' && !inQ) {result.push(cur.trim()); cur = '';}
+        else {cur += c;}
+      }
+      result.push(cur.trim());
+      return result;
+    }
+    var headers = parseLine(lines[0]);
+    var entries = []; // {agentId, dateStr, shift}
+    for (var i = 1; i < lines.length; i++) {
+      var cols = parseLine(lines[i]);
+      if (cols.length < 5) continue;
+      var row = {};
+      headers.forEach(function (h, idx) {row[h] = cols[idx] || '';});
+      var agentId = mapAgentId(row);
+      if (!agentId) continue;
+      var rawDate = (row['TitleDate'] || '').trim(); // M/D/YYYY
+      if (!rawDate) continue;
+      var parts = rawDate.split('/');
+      if (parts.length !== 3) continue;
+      var dateStr = parts[2] + '-' + parts[0].padStart(2, '0') + '-' + parts[1].padStart(2, '0');
+      var shift = mapShiftType(row['ShiftType']);
+      entries.push({agentId: agentId, dateStr: dateStr, shift: shift});
+    }
+    return entries;
+  }
+  function processRosterFile(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var entries = parseRosterCSV(e.target.result);
+        if (!entries || !entries.length) {showToast('No valid roster rows found', 'error'); return;}
+        // Group by month for preview
+        var months = {};
+        entries.forEach(function (en) {var ym = en.dateStr.slice(0, 7); months[ym] = (months[ym] || 0) + 1;});
+        setRosterPreview({entries: entries, months: months, fileName: file.name});
+      } catch (err) {showToast('CSV error: ' + err.message, 'error');}
+    };
+    reader.readAsText(file);
+  }
+  function confirmRosterImport() {
+    if (!rosterPreview) return;
+    rosterPreview.entries.forEach(function (en) {
+      try {localStorage.setItem('ek_sched_' + en.agentId + '_' + en.dateStr, en.shift);} catch (e) {}
+    });
+    // Update today's shift in ek_v2_shifts too
+    var watNow = new Date(new Date().toLocaleString('en-US', {timeZone: 'Africa/Lagos'}));
+    var todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth()+1).padStart(2,'0') + '-' + String(watNow.getDate()).padStart(2,'0');
+    rosterPreview.entries.forEach(function (en) {
+      if (en.dateStr === todayStr) onShift(en.agentId, en.shift);
+    });
+    window.dispatchEvent(new Event('ek_sched_updated'));
+    showToast('✓ ' + rosterPreview.entries.length + ' schedule entries imported');
+    setRosterPreview(null);
+  }
   function clearOverrides() {EK_AGENTS.forEach(function (a) {onShift(a.id, a.id === 'matthew' ? 'day' : a.id === 'loveth' ? 'day' : 'off');});showToast('Overrides cleared.');}
   return (
     <div>
@@ -4984,42 +5069,234 @@ function Agents({ tickets, shifts, onShift, showToast }) {
             <div style={{ font: '500 12px Sora,sans-serif', color: 'var(--muted)' }}>{new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {onCount} on shift · {EK_AGENTS.length - onCount} off</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <input ref={rosterFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={function (e) {var f = e.target.files[0]; if (f) processRosterFile(f); e.target.value='';}} />
+            <button className="btn btn-sm" style={{ background: 'rgba(99,102,241,.2)', border: '1px solid rgba(99,102,241,.4)', color: '#A5B4FC' }} onClick={function () {rosterFileRef.current && rosterFileRef.current.click();}}>📥 Import Roster CSV</button>
             <button className="btn btn-danger btn-sm" onClick={clearOverrides}>{Ico.x}&nbsp;Clear Overrides</button>
           </div>
         </div>
       </div>
-      <div style={{ padding: '18px 28px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {rosterPreview && (
+        <div style={{ margin: '12px 28px', padding: '14px 16px', background: 'rgba(99,102,241,.1)', border: '1px solid rgba(99,102,241,.35)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ font: '700 12px Sora,sans-serif', color: '#A5B4FC', marginBottom: 4 }}>📋 {rosterPreview.fileName}</div>
+            <div style={{ font: '500 11px Sora,sans-serif', color: 'var(--muted)' }}>{rosterPreview.entries.length} entries · {Object.entries(rosterPreview.months).map(function (e) {return e[0] + ' (' + e[1] + ')';}).join(' · ')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={function () {setRosterPreview(null);}} style={{ padding: '7px 14px', background: 'transparent', color: 'var(--muted)', border: '1px solid var(--bsoft)', borderRadius: 8, font: '700 11px Sora,sans-serif', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={confirmRosterImport} style={{ padding: '7px 16px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, font: '800 11px Sora,sans-serif', cursor: 'pointer' }}>Import {rosterPreview.entries.length} entries →</button>
+          </div>
+        </div>
+      )}
+      {/* ── AGENT CARDS (compact horizontal row) ── */}
+      <div style={{ padding: '16px 28px 0' }}>
+        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
           {EK_AGENTS.map(function (a) {
-            var myTix = today.filter(function (t) {return t.agent === a.id || t.agentId === a.id || (t.agentName || '').toLowerCase() === a.name.toLowerCase();});
+            var myTix = tickets.filter(function (t) {return t.agent === a.id || t.agentId === a.id || (t.agentName || '').toLowerCase() === a.name.toLowerCase();});
             var res = myTix.filter(function (t) {return t.status === 'resolved';}).length;
+            var prg = myTix.filter(function (t) {return t.status === 'progress';}).length;
+            var unr = myTix.filter(function (t) {return t.status === 'unresolved';}).length;
             var rate = myTix.length ? Math.round(res / myTix.length * 100) : 0;
             return (
-              <div key={a.id} className="agent-card" style={{ borderColor: a.color + '44' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <AgentPhoto id={a.id} name={a.name} color={a.color} size={48} />
+              <div key={a.id} className="agent-card" style={{ borderColor: a.color + '55', minWidth: 200, flex: '1 1 200px', padding: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <AgentPhoto id={a.id} name={a.name} color={a.color} size={40} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: '800 14px/1 Sora,sans-serif', color: 'var(--text)', marginBottom: 3 }}>{a.name}</div>
-                    <div style={{ font: '500 11px/1 Sora,sans-serif', color: 'var(--muted)', marginBottom: 6 }}>{a.email}</div>
-                    <ShiftPill shift={shifts[a.id]} />
+                    <div style={{ font: '700 12px/1.2 Sora,sans-serif', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name.split(' ')[0]} <span style={{ color: a.color }}>{a.name.split(' ').slice(1).join(' ')}</span></div>
+                    <div style={{ marginTop: 4 }}><ShiftPill shift={shifts[a.id]} /></div>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12, background: 'rgba(0,0,0,.2)', borderRadius: 9, padding: '10px' }}>
-                  {[{ l: 'Tickets', v: myTix.length, c: 'var(--infob)' }, { l: 'Resolved', v: res, c: 'var(--okb)' }, { l: 'Rate', v: rate + '%', c: rate >= 80 ? 'var(--okb)' : rate >= 50 ? 'var(--wnb)' : 'var(--bdb)' }].map(function (s) {return (
-                      <div key={s.l} style={{ textAlign: 'center' }}>
-                      <div style={{ font: "800 18px/1 'JetBrains Mono',monospace", color: s.c }}>{s.v}</div>
-                      <div style={{ font: '700 8px/1 Sora,sans-serif', color: 'var(--sub)', textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 3 }}>{s.l}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, background: 'rgba(0,0,0,.2)', borderRadius: 8, padding: '8px', marginBottom: 10 }}>
+                  {[{ l: 'MTD', v: myTix.length, c: 'var(--infob)' }, { l: 'Res', v: res, c: 'var(--okb)' }, { l: 'Rate', v: rate + '%', c: rate >= 80 ? 'var(--okb)' : rate >= 50 ? 'var(--wnb)' : 'var(--bdb)' }].map(function (s) {return (
+                    <div key={s.l} style={{ textAlign: 'center' }}>
+                      <div style={{ font: "700 15px/1 'JetBrains Mono',monospace", color: s.c }}>{s.v}</div>
+                      <div style={{ font: '600 8px/1 Sora,sans-serif', color: 'var(--sub)', textTransform: 'uppercase', letterSpacing: '.06em', marginTop: 2 }}>{s.l}</div>
                     </div>);})}
                 </div>
                 <ShiftBtns agentId={a.id} shifts={shifts} onShift={onShift} />
               </div>);})}
         </div>
       </div>
+
+      {/* ── MONTHLY SHIFT CALENDAR ── */}
+      <div style={{ padding: '16px 28px 24px' }}>
+        <MonthlyRosterCalendar shifts={shifts} onShift={onShift} activeMonth={activeMonth} />
+      </div>
     </div>);
 
 }
+// ── MONTHLY ROSTER CALENDAR ─────────────────────────────────────────
+function MonthlyRosterCalendar({ shifts, onShift, activeMonth }) {
+  var [tick, setTick] = useState(0);
+  // Initialise calOffset so the calendar opens on activeMonth, not today's month
+  var watNowInit = new Date(new Date().toLocaleString('en-US', {timeZone:'Africa/Lagos'}));
+  var initOffset = React.useMemo(function() {
+    if (!activeMonth) return 0;
+    var am = new Date(activeMonth + '-15');
+    return (am.getFullYear() - watNowInit.getFullYear()) * 12 + (am.getMonth() - watNowInit.getMonth());
+  }, [activeMonth]);
+  var [calOffset, setCalOffset] = useState(initOffset);
+  // Sync when activeMonth changes externally (user switches month in nav)
+  useEffect(function() {
+    var watN = new Date(new Date().toLocaleString('en-US', {timeZone:'Africa/Lagos'}));
+    if (!activeMonth) return;
+    var am = new Date(activeMonth + '-15');
+    var off = (am.getFullYear() - watN.getFullYear()) * 12 + (am.getMonth() - watN.getMonth());
+    setCalOffset(off);
+  }, [activeMonth]);
+  useEffect(function () {
+    function onUpdate() {setTick(function (n) {return n + 1;});}
+    window.addEventListener('ek_sched_updated', onUpdate);
+    window.addEventListener('storage', onUpdate);
+    return function () {window.removeEventListener('ek_sched_updated', onUpdate);window.removeEventListener('storage', onUpdate);};
+  }, []);
+
+  var SHIFT_META = {
+    day:    { emoji: '🌞', label: 'Day',   color: '#FCD34D', bg: 'rgba(252,211,77,.18)' },
+    shadow: { emoji: '🌙', label: 'Night', color: '#818CF8', bg: 'rgba(129,140,248,.18)' },
+    leave:  { emoji: '⛱️', label: 'Leave', color: '#34D399', bg: 'rgba(52,211,153,.15)' },
+    off:    { emoji: '',   label: 'Off',   color: 'rgba(148,163,184,.4)', bg: 'transparent' }
+  };
+  var CYCLE = ['off', 'day', 'shadow', 'leave'];
+  function cycleShift(agentId, dateStr, cur) {
+    var idx = CYCLE.indexOf(cur); var next = CYCLE[(idx + 1) % CYCLE.length];
+    try {localStorage.setItem('ek_sched_' + agentId + '_' + dateStr, next);} catch (e) {}
+    window.dispatchEvent(new Event('ek_sched_updated'));
+  }
+  function getShift(agentId, dateStr) {
+    var v = localStorage.getItem('ek_sched_' + agentId + '_' + dateStr);
+    if (v) return v;
+    var watNow = new Date(new Date().toLocaleString('en-US', {timeZone:'Africa/Lagos'}));
+    var todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth()+1).padStart(2,'0') + '-' + String(watNow.getDate()).padStart(2,'0');
+    if (dateStr === todayStr) {try {var s = JSON.parse(localStorage.getItem('ek_v2_shifts')||'{}'); if (s[agentId]) return s[agentId];} catch(e){}}
+    if (typeof EK_ROSTER_SEED !== 'undefined' && EK_ROSTER_SEED[agentId] && EK_ROSTER_SEED[agentId][dateStr]) return EK_ROSTER_SEED[agentId][dateStr];
+    return 'off';
+  }
+
+  // Derive month to display
+  var watNow = new Date(new Date().toLocaleString('en-US', {timeZone:'Africa/Lagos'}));
+  var displayDate = new Date(watNow.getFullYear(), watNow.getMonth() + calOffset, 1);
+  var yr = displayDate.getFullYear();
+  var mo = displayDate.getMonth(); // 0-indexed
+  var daysInMonth = new Date(yr, mo + 1, 0).getDate();
+  var firstDow = new Date(yr, mo, 1).getDay(); // 0=Sun
+  var firstDowMon = (firstDow + 6) % 7; // 0=Mon
+  var todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth()+1).padStart(2,'0') + '-' + String(watNow.getDate()).padStart(2,'0');
+  var monthLabel = displayDate.toLocaleDateString('en-GB', {month: 'long', year: 'numeric'});
+  var isCurrentMonth = yr === watNow.getFullYear() && mo === watNow.getMonth();
+
+  // Build days array with date strings
+  var days = [];
+  for (var d = 1; d <= daysInMonth; d++) {
+    days.push(yr + '-' + String(mo+1).padStart(2,'0') + '-' + String(d).padStart(2,'0'));
+  }
+
+  var DAY_HEADERS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  return (
+    <div className="card" style={{ padding: 0 }}>
+      <div className="card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>📅</span> {monthLabel} — Shift Calendar
+          <span style={{ font: '500 9px/1 Sora,sans-serif', color: 'var(--muted)', marginLeft: 4 }}>· click any cell to cycle shift</span>
+        </h3>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* Legend */}
+          {['day','shadow','leave','off'].map(function(k){var m=SHIFT_META[k];return (
+            <span key={k} style={{ display:'flex', alignItems:'center', gap:3, font:'600 9px Sora,sans-serif', color:m.color }}>
+              {k==='off' ? <span style={{width:7,height:7,borderRadius:'50%',background:'rgba(148,163,184,.5)',display:'inline-block'}}/> : m.emoji} {m.label}
+            </span>);})}
+          <div style={{ width: 1, height: 16, background: 'var(--bsoft)', margin: '0 4px' }} />
+          <button className="btn btn-sm" onClick={function(){setCalOffset(function(o){return o-1;});}} style={{padding:'4px 9px',fontSize:11}}>← Prev</button>
+          <button className="btn btn-sm" onClick={function(){setCalOffset(0);}} style={{padding:'4px 9px',fontSize:11,background:isCurrentMonth?'var(--ek-gold)':'',color:isCurrentMonth?'#000':''}}>This Month</button>
+          <button className="btn btn-sm" onClick={function(){setCalOffset(function(o){return o+1;});}} style={{padding:'4px 9px',fontSize:11}}>Next →</button>
+        </div>
+      </div>
+
+      <div style={{ overflowX: 'auto', padding: '0 14px 14px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 700 }}>
+          <thead>
+            <tr>
+              <th style={{ width: 110, padding: '8px 10px', textAlign: 'left', font: '700 9px/1 Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid var(--bsoft)' }}>AGENT</th>
+              {DAY_HEADERS.map(function(d){return (
+                <th key={d} style={{ padding: '8px 4px', textAlign: 'center', font: '700 9px/1 Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: '1px solid var(--bsoft)' }}>{d}</th>
+              );})}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Date number row */}
+            <tr>
+              <td style={{ padding: '6px 10px', font: '600 9px Sora,sans-serif', color: 'var(--muted)' }}>
+                {monthLabel.split(' ')[0].slice(0,3).toUpperCase()} {yr}
+              </td>
+              {DAY_HEADERS.map(function(_, colIdx) {
+                // Find all days in this month that fall on this weekday column
+                var datesForCol = days.filter(function(ds) {
+                  var dow = new Date(ds + 'T12:00:00').getDay();
+                  var dowMon = (dow + 6) % 7;
+                  return dowMon === colIdx;
+                });
+                return (
+                  <td key={colIdx} style={{ padding: '4px 2px', verticalAlign: 'top', borderBottom: '1px solid var(--bsoft)' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+                      {datesForCol.map(function(ds) {
+                        var dayNum = parseInt(ds.slice(8));
+                        var isToday = ds === todayStr;
+                        return (
+                          <span key={ds} style={{ font: '700 9px/1 JetBrains Mono,monospace', color: isToday ? 'var(--ek-gold)' : 'var(--muted)', background: isToday ? 'rgba(255,199,44,.15)' : 'transparent', borderRadius: 3, padding: '2px 3px', minWidth: 18, textAlign: 'center', display: 'inline-block' }}>{dayNum}</span>);
+                      })}
+                    </div>
+                  </td>);
+              })}
+            </tr>
+            {/* One row per agent */}
+            {EK_AGENTS.map(function(a) {
+              return (
+                <tr key={a.id} style={{ borderBottom: '1px solid rgba(255,255,255,.04)' }}>
+                  <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <AgentPhoto id={a.id} name={a.name} color={a.color} size={22} />
+                      <span style={{ font: '700 10px/1 Sora,sans-serif', color: a.color }}>{a.name.split(' ')[0]}</span>
+                    </div>
+                  </td>
+                  {DAY_HEADERS.map(function(_, colIdx) {
+                    var datesForCol = days.filter(function(ds) {
+                      var dow = new Date(ds + 'T12:00:00').getDay();
+                      return (dow + 6) % 7 === colIdx;
+                    });
+                    return (
+                      <td key={colIdx} style={{ padding: '3px 2px', verticalAlign: 'top' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+                          {datesForCol.map(function(ds) {
+                            var shift = getShift(a.id, ds);
+                            var meta = SHIFT_META[shift] || SHIFT_META.off;
+                            var isToday = ds === todayStr;
+                            var dayNum = parseInt(ds.slice(8));
+                            return (
+                              <div key={ds}
+                                onClick={function(){cycleShift(a.id, ds, shift);}}
+                                title={a.name.split(' ')[0] + ' · ' + ds + ' — ' + meta.label + ' (click to change)'}
+                                style={{ width: 28, height: 28, borderRadius: 6, background: shift === 'off' ? 'rgba(255,255,255,.04)' : meta.bg, border: '1px solid ' + (isToday ? 'var(--ek-gold)' : shift === 'off' ? 'rgba(255,255,255,.06)' : meta.color + '55'), cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, transition: 'all .12s', boxSizing: 'border-box' }}
+                                onMouseEnter={function(e){e.currentTarget.style.transform='scale(1.15)';e.currentTarget.style.zIndex='2';e.currentTarget.style.position='relative';}}
+                                onMouseLeave={function(e){e.currentTarget.style.transform='';e.currentTarget.style.zIndex='';e.currentTarget.style.position='';}}>
+                                {shift === 'off'
+                                  ? <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(148,163,184,.35)', display: 'block' }} />
+                                  : <span style={{ fontSize: 13, lineHeight: 1, textShadow: shift === 'shadow' ? '0 0 8px rgba(129,140,248,.9)' : shift === 'day' ? '0 0 10px rgba(253,224,71,1)' : '0 0 10px rgba(52,211,153,1)' }}>{meta.emoji}</span>
+                                }
+                              </div>);
+                          })}
+                        </div>
+                      </td>);
+                  })}
+                </tr>);
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>);
+}
+
 // ── WEEK SCHEDULE GRID ────────────────────────────────────────────
-function WeekScheduleGrid() {
+function WeekScheduleGrid({ activeMonth }) {
   var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   // Re-render when CSV import fires ek_sched_updated (same-tab event)
   var [tick, setTick] = useState(0);
@@ -5041,14 +5318,23 @@ function WeekScheduleGrid() {
     window.dispatchEvent(new Event('ek_sched_updated'));
   }
 
-  // Week offset state (0 = this week)
-  var [weekOffset, setWeekOffset] = useState(0);
-
-  // Derive the Monday of the selected week in WAT
+  // Week offset state — 0 = first week of activeMonth (or this week if no activeMonth)
   var watNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
-  var dow = watNow.getDay() || 7; // 1=Mon … 7=Sun
-  var monday = new Date(watNow);
-  monday.setDate(watNow.getDate() - dow + 1 + weekOffset * 7);
+  // Compute base: Monday of the first week of activeMonth
+  var baseMonday = React.useMemo(function() {
+    var ref = activeMonth ? new Date(activeMonth + '-01') : watNow;
+    var d = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    var dow = d.getDay() || 7;
+    d.setDate(d.getDate() - dow + 1);
+    return d;
+  }, [activeMonth]);
+  var [weekOffset, setWeekOffset] = useState(0);
+  // Reset to week 0 whenever activeMonth changes
+  useEffect(function() { setWeekOffset(0); }, [activeMonth]);
+
+  // Derive the Monday of the selected week
+  var monday = new Date(baseMonday);
+  monday.setDate(baseMonday.getDate() + weekOffset * 7);
   monday.setHours(0, 0, 0, 0);
 
   // Build date strings for the 7 days
@@ -5081,7 +5367,7 @@ function WeekScheduleGrid() {
         </h3>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-sm" onClick={function () {setWeekOffset(function (o) {return o - 1;});}} style={{ padding: '4px 10px', fontSize: 11 }}>← Prev</button>
-          <button className="btn btn-sm" onClick={function () {setWeekOffset(0);}} style={{ padding: '4px 10px', fontSize: 11, background: weekOffset === 0 ? 'var(--ek-gold)' : '', color: weekOffset === 0 ? '#000' : '' }}>This Week</button>
+          <button className="btn btn-sm" onClick={function () {setWeekOffset(0);}} style={{ padding: '4px 10px', fontSize: 11, background: weekOffset === 0 ? 'var(--ek-gold)' : '', color: weekOffset === 0 ? '#000' : '' }}>1st Week</button>
           <button className="btn btn-sm" onClick={function () {setWeekOffset(function (o) {return o + 1;});}} style={{ padding: '4px 10px', fontSize: 11 }}>Next →</button>
         </div>
       </div>
@@ -5700,12 +5986,12 @@ function App() {
   if (!signedIn) return <Signin onSignIn={onSignIn} />;
   const W = collapsed ? 64 : 220;
   const screens = {
-    dashboard: <AnalyticsDash tickets={viewTickets} onNav={setScreen} signedInName={signedInName} onSettings={() => setShowSettings(true)} />,
+    dashboard: <AnalyticsDash tickets={viewTickets} onNav={setScreen} signedInName={signedInName} onSettings={() => setShowSettings(true)} activeMonth={activeMonth} />,
     daily: <DailyReport tickets={tickets} onUpdate={onUpdate} onSettings={() => setShowSettings(true)} />,
     all: <AllComplaints tickets={viewTickets} onUpdate={onUpdate} onBulkUpdate={function (ids, patch) {setTickets(function (prev) {const next = prev.map(function (t) {return ids.includes(t.id) ? Object.assign({}, t, patch) : t;});persistTickets(next);return next;});showToast('Updated ' + ids.length + ' ticket' + (ids.length > 1 ? 's' : '') + ' ✅');}} onBatchUpdate={function (updates) {setTickets(function (prev) {const next = prev.map(function (t) {const u = updates.find(function (x) {return x.id === t.id;});return u ? Object.assign({}, t, u) : t;});persistTickets(next);return next;});showToast('✅ Batch-updated ' + updates.length + ' tickets');}} onDelete={function (ids) {setTickets(function (prev) {const next = prev.filter(function (t) {return !ids.includes(t.id);});persistTickets(next);return next;});showToast('🗑 Deleted ' + ids.length + ' ticket' + (ids.length > 1 ? 's' : '') + ' permanently.');}} showToast={showToast} onSettings={() => setShowSettings(true)} />,
     log: <LogTicket tickets={tickets} onAdd={onAdd} showToast={showToast} onSettings={() => setShowSettings(true)} />,
     slot: <SlotReport tickets={viewTickets} showToast={showToast} />,
-    agents: <Agents tickets={viewTickets} shifts={shifts} onShift={onShift} showToast={showToast} />,
+    agents: <Agents tickets={viewTickets} shifts={shifts} onShift={onShift} showToast={showToast} activeMonth={activeMonth} />,
     sync: <CloudSync tickets={tickets} setTickets={setTickets} showToast={showToast} />,
     data: <DataPage tickets={tickets} setTickets={setTickets} showToast={showToast} />,
     rpt_verify: <ReportVerify tickets={tickets} onBulkUpdate={function (ids, patch) {setTickets(function (prev) {const next = prev.map(function (t) {return ids.includes(t.id) ? Object.assign({}, t, patch) : t;});persistTickets(next);return next;});}} showToast={showToast} />,
