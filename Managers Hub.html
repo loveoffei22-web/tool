@@ -2034,10 +2034,14 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
   const [popPos, setPopPos] = useState({ top: 0, left: 0, right: 0, align: 'left' });
   React.useEffect(function () {
     if (!openCol) return;
-    function close() {setOpenCol(null);}
-    document.addEventListener('click', close);
+    function close(e) {
+      // Don't close if the click is inside the popover itself
+      if (e.target && e.target.closest && e.target.closest('[data-filter-pop]')) return;
+      setOpenCol(null);
+    }
+    document.addEventListener('mousedown', close);
     window.addEventListener('resize', close);
-    return function () {document.removeEventListener('click', close);window.removeEventListener('resize', close);};
+    return function () {document.removeEventListener('mousedown', close);window.removeEventListener('resize', close);};
   }, [openCol]);
   function HeadFilter({ label, colKey, value, setValue, options, align, extra, activeOverride }) {
     var active = activeOverride != null ? activeOverride : value && value !== 'all' && value !== 'newest';
@@ -2046,7 +2050,10 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
       e.stopPropagation();
       if (open) {setOpenCol(null);return;}
       var r = e.currentTarget.getBoundingClientRect();
-      setPopPos({ top: r.bottom + 4, left: r.left, right: window.innerWidth - r.right, align: align === 'right' ? 'right' : 'left' });
+      // Auto-flip: if less than 220px of space to the right, anchor from right edge instead
+      var spaceRight = window.innerWidth - r.left;
+      var shouldFlip = align === 'right' || spaceRight < 220;
+      setPopPos({ top: r.bottom + 4, left: r.left, right: window.innerWidth - r.right, align: shouldFlip ? 'right' : 'left' });
       setOpenCol(colKey);
     }
     return (
@@ -2055,13 +2062,13 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
         <span onClick={toggle} title="Filter column"
         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: 4, cursor: 'pointer', flexShrink: 0, background: active ? 'var(--ek-gold)' : 'rgba(255,255,255,.12)', color: active ? '#0A1628' : 'rgba(255,255,255,.75)', font: '700 9px Sora,sans-serif', lineHeight: 1 }}>▾</span>
         {open &&
-        <div onClick={function (e) {e.stopPropagation();}}
-        style={{ position: 'fixed', top: popPos.top, left: popPos.align === 'right' ? 'auto' : popPos.left, right: popPos.align === 'right' ? popPos.right : 'auto', zIndex: 9000, background: 'var(--surface)', border: '1.5px solid var(--bsoft)', borderRadius: 8, boxShadow: '0 10px 30px rgba(0,0,0,.5)', minWidth: 170, maxHeight: 340, overflowY: 'auto', padding: 4, textTransform: 'none', letterSpacing: 0 }}>
+        <div data-filter-pop="1" onClick={function (e) {e.stopPropagation();}}
+        style={{ position: 'fixed', top: popPos.top, left: popPos.align === 'right' ? 'auto' : popPos.left, right: popPos.align === 'right' ? popPos.right : 'auto', zIndex: 9000, background: 'var(--surface)', border: '1.5px solid var(--bsoft)', borderRadius: 8, boxShadow: '0 10px 30px rgba(0,0,0,.5)', minWidth: 200, maxWidth: 'min(320px, 90vw)', maxHeight: 340, overflowY: 'auto', padding: 4, textTransform: 'none', letterSpacing: 0 }}>
             {extra && <div style={{ padding: '4px 6px 8px', borderBottom: options && options.length ? '1px solid var(--bsoft)' : 'none', marginBottom: options && options.length ? 4 : 0 }}>{extra}</div>}
             {(options || []).map(function (o) {
             var on = value === o.v;
             return <div key={o.v} onClick={function () {setValue(o.v);setOpenCol(null);}}
-            style={{ padding: '7px 10px', borderRadius: 5, cursor: 'pointer', font: on ? '700 12px Sora,sans-serif' : '500 12px Sora,sans-serif', color: on ? '#0A1628' : 'var(--fg)', background: on ? 'var(--ek-gold)' : 'transparent', whiteSpace: 'nowrap' }}
+            style={{ padding: '7px 10px', borderRadius: 5, cursor: 'pointer', font: on ? '700 12px Sora,sans-serif' : '500 12px Sora,sans-serif', color: on ? '#0A1628' : 'var(--fg)', background: on ? 'var(--ek-gold)' : 'transparent', whiteSpace: 'normal', wordBreak: 'break-word' }}
             onMouseEnter={function (e) {if (!on) e.currentTarget.style.background = 'rgba(255,255,255,.08)';}}
             onMouseLeave={function (e) {if (!on) e.currentTarget.style.background = 'transparent';}}>{o.l}</div>;
           })}
@@ -2502,88 +2509,6 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
                         </td>
                         <td><span style={{ font: '700 10px Sora,sans-serif', color: 'var(--ek-gold)' }}>{isExp ? '▲ close' : '▼ details'}</span></td>
                       </tr>
-                      {isExp &&
-                      <tr><td colSpan={12} style={{ padding: 0, border: 'none' }}>
-                          <div style={{ position: 'fixed', inset: 0, background: 'rgba(3,8,28,.72)', backdropFilter: 'blur(3px)', zIndex: 1200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px' }} onClick={function () {setExpanded(null);}}>
-                          <div onClick={function (e) {e.stopPropagation();}} onKeyDown={function (e) {if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {e.preventDefault();saveEdit(t);setExpanded(null);} else if (e.key === 'Escape') {setExpanded(null);}}} style={{ width: 'min(780px,96vw)', background: 'var(--surface)', border: '2px solid var(--ek-gold)', borderRadius: 14, overflow: 'hidden auto', boxShadow: '0 30px 90px rgba(0,0,0,.6)', maxHeight: 'calc(100vh - 80px)' }}>
-                            {/* Header */}
-                            <div style={{ background: 'linear-gradient(135deg,#1E3A8A,#0F2461)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{ background: 'rgba(255,255,255,.12)', borderRadius: 8, padding: '5px 9px', font: '800 11px Sora,sans-serif', color: '#FFC72C', letterSpacing: '.05em' }}>EKEDP ⚡</div>
-                                <div>
-                                  <span style={{ font: "800 14px/1 'JetBrains Mono',monospace", color: '#60A5FA' }}>#{t.num}</span>
-                                  <span style={{ font: '500 11px Sora,sans-serif', color: 'rgba(255,255,255,.6)', marginLeft: 10 }}>{t.name}</span>
-                                </div>
-                                <span style={{ marginLeft: 4 }}>{t.status === 'resolved' ? <span style={{ background: '#16A34A22', color: '#4ADE80', border: '1px solid #16A34A55', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>RESOLVED</span> : t.status === 'progress' ? <span style={{ background: '#D9770622', color: '#FCD34D', border: '1px solid #D9770655', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>IN PROGRESS</span> : <span style={{ background: '#DC262622', color: '#F87171', border: '1px solid #DC262655', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>UNRESOLVED</span>}</span>
-                              </div>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <button onClick={function (e) {e.stopPropagation();if (window.confirm('Delete ticket #' + t.num + '?')) {onDelete && onDelete([t.id]);setExpanded(null);}}} style={{ padding: '6px 12px', background: 'rgba(239,68,68,.2)', color: '#F87171', border: '1px solid rgba(239,68,68,.4)', borderRadius: 7, font: '800 11px Sora,sans-serif', cursor: 'pointer' }}>🗑 Delete</button>
-                                <button onClick={function (e) {e.stopPropagation();setExpanded(null);}} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.5)', cursor: 'pointer', font: '700 11px Sora,sans-serif' }}>✕ Close</button>
-                              </div>
-                            </div>
-                            {/* Info grid — all editable */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 0, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
-                              {[
-                                ['👤 CUSTOMER NAME', 'name', 'text'],
-                                ['🎫 TICKET NO.', 'num', 'text'],
-                                ['📞 TELEPHONE', 'phone', 'text'],
-                                ['📧 EMAIL', 'email', 'text'],
-                                ['📍 CUSTOMER ADDRESS', 'addr', 'text'],
-                                ['⚡ METER / ACCOUNT NO.', 'meter', 'text'],
-                                ['🔗 CHANNEL', 'channel', 'text'],
-                                ['🏢 BUSINESS UNIT', 'bu', 'text'],
-                                ['📅 DATE / TIME RECEIVED', 'created', 'text'],
-                                ['✅ RESOLVED DATE', 'resolvedDate', 'date']].
-                                map(function (f) {
-                                  var val = getF(t, f[1]);if ((val === undefined || val === null || val === '') && f[1] === 'addr') val = t.address;if ((val === undefined || val === null || val === '') && f[1] === 'channel') val = t.source || 'Mobile App';
-                                  return (
-                                    <div key={f[0]} style={{ padding: '8px 12px', borderRight: '1px solid rgba(255,255,255,.05)', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
-                                  <div style={{ font: '700 8.5px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.10em', marginBottom: 5 }}>{f[0]}</div>
-                                  <input type={f[2]} value={val || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, f[1], e.target.value);}} placeholder="—"
-                                      style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid var(--bsoft)', borderRadius: 6, padding: '5px 7px', font: '600 11px Sora,sans-serif', color: 'var(--text)', outline: 'none', colorScheme: 'dark' }}
-                                      onFocus={function (e) {e.target.style.borderColor = 'var(--ek-gold)';}} onBlur={function (e) {e.target.style.borderColor = 'var(--bsoft)';}} />
-                                </div>);})}
-                            </div>
-                            {/* Complaint description — editable, with status right here */}
-                            <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
-                              <div style={{ font: '700 8.5px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.10em', marginBottom: 6 }}>📝 COMPLAINT DESCRIPTION ✏ <span style={{ color: 'var(--muted)', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>· the customer's complaint</span></div>
-                              <textarea className="inp" rows={3} value={getF(t, 'issue') || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'issue', e.target.value);}} placeholder="Describe the complaint…" style={{ resize: 'vertical', fontSize: 11, marginBottom: 10 }} />
-                              <label className="lbl">Status of this complaint</label>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                {[{ v: 'progress', l: '⏳ In Progress', c: '#F59E0B' }, { v: 'resolved', l: '✅ Resolved', c: '#22C55E' }, { v: 'unresolved', l: '🔴 Unresolved', c: '#C2410C' }].map(function (s) {const on = getF(t, 'status') === s.v;return (
-                                      <button key={s.v} onClick={function (e) {e.stopPropagation();setF(t.id, 'status', s.v);if (s.v === 'resolved') {if (!getF(t, 'resolvedDate')) setF(t.id, 'resolvedDate', watTodayStr());} else {setF(t.id, 'resolvedDate', '');}}} style={{ flex: 1, padding: '7px', border: '1px solid ' + (on ? s.c : 'var(--bsoft)'), borderRadius: 7, background: on ? s.c + '22' : 'transparent', color: on ? s.c : 'var(--muted)', font: '700 11px Sora,sans-serif', cursor: 'pointer' }}>{s.l}</button>);
-                                  })}
-                              </div>
-                            </div>
-                            {/* Editable section */}
-                            <div style={{ padding: '14px 16px', background: 'rgba(0,0,0,.15)' }}>
-                              <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 12 }}>✏️ UPDATE THIS TICKET</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                                <div>
-                                  <label className="lbl">Category</label>
-                                  <select className="sel" value={getF(t, 'category') || EK_CATS[0]} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();const val = e.target.value;setF(t.id, 'category', val);var ar = respForCat(val);if (ar) setF(t.id, 'resp', ar);}}>
-                                    {EK_CATS.map(function (c) {return <option key={c} value={c}>{c.toUpperCase()}</option>;})}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="lbl">Responsible Party</label>
-                                  <select className="sel" value={getF(t, 'resp') || EK_RESP[0].name} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'resp', e.target.value);}}>
-                                    {EK_RESP.map(function (r) {return <option key={r.name} value={r.name}>{r.name}</option>;})}
-                                  </select>
-                                </div>
-                              </div>
-                              <div style={{ marginBottom: 12 }}>
-                                <label className="lbl">🛠 Action Taken <span style={{ color: 'var(--muted)', fontWeight: 500 }}>— what happened today</span></label>
-                                <textarea className="inp" rows={2} value={getF(t, 'note') || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'note', e.target.value);}} placeholder="Add action taken or resolution note…" style={{ resize: 'vertical', fontSize: 11 }} />
-                              </div>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={function (e) {e.stopPropagation();saveEdit(t);setExpanded(null);}} style={{ flex: 1, padding: '10px', background: 'var(--ek-gold)', color: '#0A1A4F', border: 'none', borderRadius: 8, font: '800 13px Sora,sans-serif', cursor: 'pointer' }}>💾 Save Update · <span style={{ opacity: .7, fontWeight: 700 }}>Enter</span></button>
-                                <button onClick={function (e) {e.stopPropagation();if (window.confirm('Delete ticket #' + t.num + '?')) {onDelete && onDelete([t.id]);setExpanded(null);}}} style={{ padding: '10px 18px', background: 'rgba(239,68,68,.15)', color: '#F87171', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, font: '800 12px Sora,sans-serif', cursor: 'pointer' }}>🗑 Delete</button>
-                              </div>
-                            </div>
-                          </div>
-                          </div>
-                        </td></tr>}
                     </React.Fragment>);
                 })}
                 {!paged.length && <tr><td colSpan={12} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>No tickets match your filters.</td></tr>}
@@ -2633,6 +2558,95 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
           </div>
         </div>
       }
+      {/* ── Ticket detail portal — renders outside the table so it's never clipped ── */}
+      {(function() {
+        var t = expanded ? filtered.find(function(x){return x.id === expanded;}) : null;
+        if (!t) return null;
+        return ReactDOM.createPortal(
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(3,8,28,.72)', backdropFilter: 'blur(3px)', zIndex: 9100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px', overflowY: 'auto' }} onClick={function () {setExpanded(null);}}>
+            <div onClick={function (e) {e.stopPropagation();}} onKeyDown={function (e) {if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {e.preventDefault();saveEdit(t);setExpanded(null);} else if (e.key === 'Escape') {setExpanded(null);}}} style={{ width: 'min(780px,96vw)', background: 'var(--surface)', border: '2px solid var(--ek-gold)', borderRadius: 14, overflow: 'visible', boxShadow: '0 30px 90px rgba(0,0,0,.6)', flexShrink: 0 }}>
+              {/* Header */}
+              <div style={{ background: 'linear-gradient(135deg,#1E3A8A,#0F2461)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,.08)', borderRadius: '12px 12px 0 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ background: 'rgba(255,255,255,.12)', borderRadius: 8, padding: '5px 9px', font: '800 11px Sora,sans-serif', color: '#FFC72C', letterSpacing: '.05em' }}>EKEDP ⚡</div>
+                  <div>
+                    <span style={{ font: "800 14px/1 'JetBrains Mono',monospace", color: '#60A5FA' }}>#{t.num}</span>
+                    <span style={{ font: '500 11px Sora,sans-serif', color: 'rgba(255,255,255,.6)', marginLeft: 10 }}>{t.name}</span>
+                  </div>
+                  <span style={{ marginLeft: 4 }}>{t.status === 'resolved' ? <span style={{ background: '#16A34A22', color: '#4ADE80', border: '1px solid #16A34A55', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>RESOLVED</span> : t.status === 'progress' ? <span style={{ background: '#D9770622', color: '#FCD34D', border: '1px solid #D9770655', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>IN PROGRESS</span> : <span style={{ background: '#DC262622', color: '#F87171', border: '1px solid #DC262655', borderRadius: 5, padding: '3px 8px', font: '700 10px Sora,sans-serif' }}>UNRESOLVED</span>}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button onClick={function (e) {e.stopPropagation();if (window.confirm('Delete ticket #' + t.num + '?')) {onDelete && onDelete([t.id]);setExpanded(null);}}} style={{ padding: '6px 12px', background: 'rgba(239,68,68,.2)', color: '#F87171', border: '1px solid rgba(239,68,68,.4)', borderRadius: 7, font: '800 11px Sora,sans-serif', cursor: 'pointer' }}>🗑 Delete</button>
+                  <button onClick={function (e) {e.stopPropagation();setExpanded(null);}} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.5)', cursor: 'pointer', font: '700 11px Sora,sans-serif' }}>✕ Close</button>
+                </div>
+              </div>
+              {/* Info grid — all editable */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 0, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                {[
+                  ['👤 CUSTOMER NAME', 'name', 'text'],
+                  ['🎫 TICKET NO.', 'num', 'text'],
+                  ['📞 TELEPHONE', 'phone', 'text'],
+                  ['📧 EMAIL', 'email', 'text'],
+                  ['📍 CUSTOMER ADDRESS', 'addr', 'text'],
+                  ['⚡ METER / ACCOUNT NO.', 'meter', 'text'],
+                  ['🔗 CHANNEL', 'channel', 'text'],
+                  ['🏢 BUSINESS UNIT', 'bu', 'text'],
+                  ['📅 DATE / TIME RECEIVED', 'created', 'text'],
+                  ['✅ RESOLVED DATE', 'resolvedDate', 'date']].
+                  map(function (f) {
+                    var val = getF(t, f[1]);if ((val === undefined || val === null || val === '') && f[1] === 'addr') val = t.address;if ((val === undefined || val === null || val === '') && f[1] === 'channel') val = t.source || 'Mobile App';
+                    return (
+                      <div key={f[0]} style={{ padding: '8px 12px', borderRight: '1px solid rgba(255,255,255,.05)', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                        <div style={{ font: '700 8.5px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.10em', marginBottom: 5 }}>{f[0]}</div>
+                        <input type={f[2]} value={val || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, f[1], e.target.value);}} placeholder="—"
+                          style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid var(--bsoft)', borderRadius: 6, padding: '5px 7px', font: '600 11px Sora,sans-serif', color: 'var(--text)', outline: 'none', colorScheme: 'dark' }}
+                          onFocus={function (e) {e.target.style.borderColor = 'var(--ek-gold)';}} onBlur={function (e) {e.target.style.borderColor = 'var(--bsoft)';}} />
+                      </div>);
+                  })}
+              </div>
+              {/* Complaint description — editable, with status right here */}
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                <div style={{ font: '700 8.5px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.10em', marginBottom: 6 }}>📝 COMPLAINT DESCRIPTION ✏ <span style={{ color: 'var(--muted)', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>· the customer's complaint</span></div>
+                <textarea className="inp" rows={3} value={getF(t, 'issue') || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'issue', e.target.value);}} placeholder="Describe the complaint…" style={{ resize: 'vertical', fontSize: 11, marginBottom: 10 }} />
+                <label className="lbl">Status of this complaint</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[{ v: 'progress', l: '⏳ In Progress', c: '#F59E0B' }, { v: 'resolved', l: '✅ Resolved', c: '#22C55E' }, { v: 'unresolved', l: '🔴 Unresolved', c: '#C2410C' }].map(function (s) {
+                    const on = getF(t, 'status') === s.v;
+                    return (<button key={s.v} onClick={function (e) {e.stopPropagation();setF(t.id, 'status', s.v);if (s.v === 'resolved') {if (!getF(t, 'resolvedDate')) setF(t.id, 'resolvedDate', watTodayStr());} else {setF(t.id, 'resolvedDate', '');}}} style={{ flex: 1, padding: '7px', border: '1px solid ' + (on ? s.c : 'var(--bsoft)'), borderRadius: 7, background: on ? s.c + '22' : 'transparent', color: on ? s.c : 'var(--muted)', font: '700 11px Sora,sans-serif', cursor: 'pointer' }}>{s.l}</button>);
+                  })}
+                </div>
+              </div>
+              {/* Editable section */}
+              <div style={{ padding: '14px 16px', background: 'rgba(0,0,0,.15)', borderRadius: '0 0 12px 12px' }}>
+                <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 12 }}>✏️ UPDATE THIS TICKET</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label className="lbl">Category</label>
+                    <select className="sel" value={getF(t, 'category') || EK_CATS[0]} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();const val = e.target.value;setF(t.id, 'category', val);var ar = respForCat(val);if (ar) setF(t.id, 'resp', ar);}}>
+                      {EK_CATS.map(function (c) {return <option key={c} value={c}>{c.toUpperCase()}</option>;})}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lbl">Responsible Party</label>
+                    <select className="sel" value={getF(t, 'resp') || EK_RESP[0].name} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'resp', e.target.value);}}>
+                      {EK_RESP.map(function (r) {return <option key={r.name} value={r.name}>{r.name}</option>;})}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label className="lbl">🛠 Action Taken <span style={{ color: 'var(--muted)', fontWeight: 500 }}>— what happened today</span></label>
+                  <textarea className="inp" rows={2} value={getF(t, 'note') || ''} onClick={function (e) {e.stopPropagation();}} onChange={function (e) {e.stopPropagation();setF(t.id, 'note', e.target.value);}} placeholder="Add action taken or resolution note…" style={{ resize: 'vertical', fontSize: 11 }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={function (e) {e.stopPropagation();saveEdit(t);setExpanded(null);}} style={{ flex: 1, padding: '10px', background: 'var(--ek-gold)', color: '#0A1A4F', border: 'none', borderRadius: 8, font: '800 13px Sora,sans-serif', cursor: 'pointer' }}>💾 Save Update · <span style={{ opacity: .7, fontWeight: 700 }}>Enter</span></button>
+                  <button onClick={function (e) {e.stopPropagation();if (window.confirm('Delete ticket #' + t.num + '?')) {onDelete && onDelete([t.id]);setExpanded(null);}}} style={{ padding: '10px 18px', background: 'rgba(239,68,68,.15)', color: '#F87171', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, font: '800 12px Sora,sans-serif', cursor: 'pointer' }}>🗑 Delete</button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
     </div>);
 
 }
