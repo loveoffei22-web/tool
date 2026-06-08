@@ -759,10 +759,18 @@ function saveShifts(s){localStorage.setItem(EK_SHIFTS_KEY,JSON.stringify(s));}
 
 // Ticket persistence helpers
 function persistTickets(tix){window.EK_TICKETS=tix;try{localStorage.setItem('ek_v2_tickets',JSON.stringify(tix));}catch(e){console.warn('persistTickets failed',e);}}
+// ── EMBEDDED POWER AUTOMATE URLs ─────────────────────────────────────────────
+var EK_PUSH_URL       = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3ed8bf42bf5345dc8128eab75109bb62/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=anYBn_vpSp4nxb9BouzU8jT1ZK2zaHo1i3XA1T_GsfI';
+var EK_PULL_DAY_URL   = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/094e6f16da3b41a3abdbf798f362756d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=DoIEuHK_6Eu6x3e5bPvNVb4bzSP5WhLC2YvGsMjSKS8';
+var EK_PULL_MONTH_URL = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/1a7ed51697d8497580c693bc4dc80789/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=zEVjKCQ3FSgqBbYalYO9aF14GhhXIJxFL7bTpt_-p_o';
+// Auto-seed URLs — manager never needs to visit Cloud Sync
+if (!localStorage.getItem('ek_pa_push_url')) localStorage.setItem('ek_pa_push_url', EK_PUSH_URL);
+if (!localStorage.getItem('ek_pa_pull_url')) localStorage.setItem('ek_pa_pull_url', EK_PULL_DAY_URL);
+// ─────────────────────────────────────────────────────────────────────────────
 // Background auto-pull from SharePoint via the saved Power Automate URL.
 // Same log-only merge as the Cloud Sync page, but runnable without opening it.
-async function ekCloudAutoPull(){
-  var url=localStorage.getItem('ek_pa_pull_url');
+async function ekCloudAutoPull(overrideUrl){
+  var url=overrideUrl||localStorage.getItem('ek_pa_pull_url');
   if(!url)return null;
   var res=await fetch(url,{method:'POST'});
   if(!res.ok&&res.status!==404)throw new Error('HTTP '+res.status);
@@ -2057,6 +2065,7 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
   React.useEffect(function () {
     if (!openCol) return;
     function close(e) {
+      if (e.target && e.target.closest && e.target.closest('[data-filter-pop]')) return;
       setOpenCol(null);
     }
     document.addEventListener('mousedown', close);
@@ -6158,14 +6167,17 @@ function App() {
   useEffect(function () {
     var running = false;
     async function bgPull() {
-      if (running) return; // skip if previous pull is still in flight
-      var url = localStorage.getItem('ek_pa_pull_url');
-      if (!url) return;
+      if (running) return;
       running = true;
       try {
-        var result = await ekCloudAutoPull();
+        // Smart pull: first ever open → full month; subsequent → today only
+        var initialDone = localStorage.getItem('ek_initial_pull_done');
+        var pullUrl = initialDone ? EK_PULL_DAY_URL : EK_PULL_MONTH_URL;
+        var result = await ekCloudAutoPull(pullUrl);
+        if (!initialDone) {
+          localStorage.setItem('ek_initial_pull_done', '1');
+        }
         if (result && result.count > 0) {
-          // New tickets arrived — refresh state from localStorage
           try {
             var raw = localStorage.getItem('ek_v2_tickets');
             if (raw) {

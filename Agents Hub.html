@@ -601,9 +601,17 @@ function saveTix(id, tix) {
   try {localStorage.setItem('ek_tix_' + id, JSON.stringify(tix));} catch (e) {}
 }
 function loadShifts() {try {return JSON.parse(localStorage.getItem('ek_v2_shifts') || '{}');} catch {return {};}}
+// ── EMBEDDED POWER AUTOMATE URLs ─────────────────────────────────────────────
+var EK_PUSH_URL       = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3ed8bf42bf5345dc8128eab75109bb62/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=anYBn_vpSp4nxb9BouzU8jT1ZK2zaHo1i3XA1T_GsfI';
+var EK_PULL_DAY_URL   = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/094e6f16da3b41a3abdbf798f362756d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=DoIEuHK_6Eu6x3e5bPvNVb4bzSP5WhLC2YvGsMjSKS8';
+var EK_PULL_MONTH_URL = 'https://defaultb841de22e0c340c5b3fec287594b46.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/1a7ed51697d8497580c693bc4dc80789/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=zEVjKCQ3FSgqBbYalYO9aF14GhhXIJxFL7bTpt_-p_o';
+// Auto-seed URLs on first load — agent never needs to visit Cloud Sync
+if (!localStorage.getItem('ek_pa_push_url')) localStorage.setItem('ek_pa_push_url', EK_PUSH_URL);
+if (!localStorage.getItem('ek_pa_pull_url')) localStorage.setItem('ek_pa_pull_url', EK_PULL_DAY_URL);
+// ─────────────────────────────────────────────────────────────────────────────
 // ── BACKGROUND SharePoint AUTO-PULL (global, screen-independent) ─────────────
-async function agCloudAutoPull() {
-  var url = localStorage.getItem('ek_pa_pull_url');
+async function agCloudAutoPull(overrideUrl) {
+  var url = overrideUrl || localStorage.getItem('ek_pa_pull_url');
   if (!url) return null;
   var res = await fetch(url, { method: 'POST' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1417,10 +1425,13 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
   const [popPos, setPopPos] = useState({ top: 0, left: 0, right: 0, align: 'left' });
   React.useEffect(function () {
     if (!openCol) return;
-    function close() {setOpenCol(null);}
-    document.addEventListener('click', close);
+    function close(e) {
+      if (e.target && e.target.closest && e.target.closest('[data-filter-pop]')) return;
+      setOpenCol(null);
+    }
+    document.addEventListener('mousedown', close);
     window.addEventListener('resize', close);
-    return function () {document.removeEventListener('click', close);window.removeEventListener('resize', close);};
+    return function () {document.removeEventListener('mousedown', close);window.removeEventListener('resize', close);};
   }, [openCol]);
   function HeadFilter({ label, colKey, value, setValue, options, align, extra, activeOverride }) {
     var active = activeOverride != null ? activeOverride : value && value !== 'all' && value !== 'newest';
@@ -1435,15 +1446,15 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
           <span>{label}</span>
-          <span onClick={toggle} title="Filter column"
+          <span onMouseDown={function(e){e.preventDefault();toggle(e);}} title="Filter column"
         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: 4, cursor: 'pointer', flexShrink: 0, background: active ? 'var(--ek-gold)' : 'rgba(255,255,255,.12)', color: active ? '#0A1628' : 'rgba(255,255,255,.75)', font: '700 9px Sora,sans-serif', lineHeight: 1 }}>▾</span>
           {open &&
-        <div onClick={function (e) {e.stopPropagation();}}
+        <div data-filter-pop="1" onClick={function (e) {e.stopPropagation();}}
         style={{ position: 'fixed', top: popPos.top, left: popPos.align === 'right' ? 'auto' : popPos.left, right: popPos.align === 'right' ? popPos.right : 'auto', zIndex: 9000, background: 'var(--surface)', border: '1.5px solid var(--bsoft)', borderRadius: 8, boxShadow: '0 10px 30px rgba(0,0,0,.5)', minWidth: 170, maxHeight: 340, overflowY: 'auto', padding: 4, textTransform: 'none', letterSpacing: 0 }}>
               {extra && <div style={{ padding: '4px 6px 8px', borderBottom: options && options.length ? '1px solid var(--bsoft)' : 'none', marginBottom: options && options.length ? 4 : 0 }}>{extra}</div>}
               {(options || []).map(function (o) {
             var on = value === o.v;
-            return <div key={o.v} onClick={function () {setValue(o.v);setOpenCol(null);}}
+            return <div key={o.v} onMouseDown={function (e) {e.preventDefault();e.stopPropagation();setValue(o.v);setOpenCol(null);}}
             style={{ padding: '7px 10px', borderRadius: 5, cursor: 'pointer', font: on ? '700 12px Sora,sans-serif' : '500 12px Sora,sans-serif', color: on ? '#0A1628' : 'var(--fg)', background: on ? 'var(--ek-gold)' : 'transparent', whiteSpace: 'nowrap' }}
             onMouseEnter={function (e) {if (!on) e.currentTarget.style.background = 'rgba(255,255,255,.08)';}}
             onMouseLeave={function (e) {if (!on) e.currentTarget.style.background = 'transparent';}}>{o.l}</div>;
@@ -3372,9 +3383,15 @@ function App() {
       if (running) return;
       running = true;
       try {
-        var result = await agCloudAutoPull();
+        // Smart pull: first ever open → full month; subsequent → today only
+        var initialDone = localStorage.getItem('ek_initial_pull_done');
+        var pullUrl = initialDone ? EK_PULL_DAY_URL : EK_PULL_MONTH_URL;
+        var result = await agCloudAutoPull(pullUrl);
+        if (!initialDone) {
+          // Mark first pull complete — switch to daily from now on
+          localStorage.setItem('ek_initial_pull_done', '1');
+        }
         if (result && result.count > 0) {
-          // New tickets landed — trigger syncTick so agent view refreshes
           setSyncTick(function (n) { return n + 1; });
         }
       } catch (e) {
