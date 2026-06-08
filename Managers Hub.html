@@ -6152,6 +6152,45 @@ function App() {
     return () => clearInterval(id);
   }, [autoTheme]);
 
+  // ── BACKGROUND SharePoint AUTO-PULL ────────────────────────────────────────
+  // Runs every 30 seconds regardless of which screen is open.
+  // Silently merges any new tickets from SharePoint into the app state.
+  useEffect(function () {
+    var running = false;
+    async function bgPull() {
+      if (running) return; // skip if previous pull is still in flight
+      var url = localStorage.getItem('ek_pa_pull_url');
+      if (!url) return;
+      running = true;
+      try {
+        var result = await ekCloudAutoPull();
+        if (result && result.count > 0) {
+          // New tickets arrived — refresh state from localStorage
+          try {
+            var raw = localStorage.getItem('ek_v2_tickets');
+            if (raw) {
+              var fresh = JSON.parse(raw);
+              if (Array.isArray(fresh)) {
+                setTickets(fresh);
+                window.EK_TICKETS = fresh;
+              }
+            }
+          } catch (e) {}
+        }
+      } catch (e) {
+        // Silent — background pull failures don't interrupt the user
+      } finally {
+        running = false;
+      }
+    }
+    // Initial pull 2 seconds after app loads
+    var initTimer = setTimeout(bgPull, 2000);
+    // Then every 30 seconds continuously
+    var interval = setInterval(bgPull, 30000);
+    return function () { clearTimeout(initTimer); clearInterval(interval); };
+  }, []); // eslint-disable-line
+  // ──────────────────────────────────────────────────────────────────────────
+
   function showToast(msg, type) {if (toastTimer.current) clearTimeout(toastTimer.current);setToast({ msg, type: 'success', ...(type === 'error' ? { type: 'error' } : {}) });toastTimer.current = setTimeout(() => setToast(null), 3000);}
 
   function onShift(agentId, shift) {setShifts(function (s) {const n = { ...s, [agentId]: shift };saveShifts(n);return n;});}

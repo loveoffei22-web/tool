@@ -600,7 +600,59 @@ function saveTix(id, tix) {
   // Also keep legacy key as backup
   try {localStorage.setItem('ek_tix_' + id, JSON.stringify(tix));} catch (e) {}
 }
-function loadShifts() {try {return JSON.parse(localStorage.getItem('ek_v2_shifts') || '{}');} catch {return {};}}
+function loadShifts() {try {return JSON.parse(localStorage.getItem('ek_v2_shifts') || '{}');} catch {return {};}
+// ── BACKGROUND SharePoint AUTO-PULL (global, screen-independent) ─────────────
+async function agCloudAutoPull() {
+  var url = localStorage.getItem('ek_pa_pull_url');
+  if (!url) return null;
+  var res = await fetch(url, { method: 'POST' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  var cloud1 = await res.json();
+  // Normalise response format
+  var normalized = {};
+  if (Array.isArray(cloud1.manager)) {
+    normalized = { manager: cloud1.manager.map(function (t) {
+      var s = (t.status || t.Status || '');
+      return Object.assign({}, t, {
+        id: t.id || 'tk_mgr_' + t.num,
+        agent: t.agent || 'manager',
+        issue: t.issue || t.description || t.Description || t.note || '',
+        status: s === 'Closed' || s === 'Resolved' || s === 'resolved' ? 'resolved' : s === 'Assigned' || s === 'In Progress' || s === 'progress' ? 'progress' : 'unresolved',
+        created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || ''
+      });
+    })};
+  } else if (Array.isArray(cloud1.days)) {
+    var flat = [];
+    cloud1.days.forEach(function (day) {
+      (day.tickets || []).forEach(function (t) {
+        flat.push({ id: t.id || 'tk_' + t.num, num: t.num || '', name: t.name || '', phone: (t.phone || '').replace(/^\+234/, '0'), meter: t.meter || '', addr: t.address || t.addr || '', bu: t.bu || '', issue: t.note || t.title || '', resp: t.assignee || '', category: t.category || '', status: (function (s) {s = s || '';return s === 'Closed' || s === 'Resolved' ? 'resolved' : s === 'Assigned' || s === 'In Progress' ? 'progress' : 'unresolved';})(t.status || t.Status || ''), note: t.resolutionNote || '', agent: 'manager', day: day.dayNum || new Date().getDate(), created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || '' });
+      });
+    });
+    normalized = { manager: flat };
+  } else {
+    normalized = cloud1;
+  }
+  // Handle _shifts / _guide side-loads
+  if (normalized._shifts && typeof normalized._shifts === 'object') {try {localStorage.setItem('ek_v2_shifts', JSON.stringify(normalized._shifts));} catch (e) {}}
+  if (Array.isArray(normalized._guide) && normalized._guide.length) {try {localStorage.setItem('ek_guide', JSON.stringify(normalized._guide));} catch (e) {}}
+  // Merge into shared pool — never overwrite existing tickets (log-only)
+  var existing = [];try {existing = JSON.parse(localStorage.getItem('ek_v2_tickets') || '[]');} catch (e) {}
+  var existingNums = new Set(existing.map(function (x) {return (x.num || '').trim().toLowerCase();}));
+  var existingIds = new Set(existing.map(function (x) {return x.id || '';}));
+  var added = 0;
+  Object.keys(normalized).forEach(function (agId) {
+    if (agId.charAt(0) === '_' || !Array.isArray(normalized[agId])) return;
+    normalized[agId].forEach(function (t) {
+      var n = (t.num || '').trim().toLowerCase();
+      if (n && existingNums.has(n) || t.id && existingIds.has(t.id)) return;
+      existing.push(t); if (n) existingNums.add(n); if (t.id) existingIds.add(t.id); added++;
+    });
+  });
+  if (added > 0) {try {localStorage.setItem('ek_v2_tickets', JSON.stringify(existing));} catch (e) {}}
+  try {localStorage.setItem('ek_last_sync', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }));} catch (e) {}
+  return { count: added };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 // De-dup: ticket number is the sole key when present; fall back to full sig only for numberless tickets
 function _norm(s) {return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9 ]/g, '').trim();}
 function ticketSig(t) {return _norm(t.num || '') + '|' + _norm(t.name) + '|' + _norm(t.issue || t.complaint || t.category || '');}
@@ -3310,6 +3362,32 @@ function App() {
     return function () {window.removeEventListener('storage', onStorage);clearInterval(poll);};
   }, []);
   useEffect(function () {const id = setInterval(function () {setShifts(loadShifts());}, 5000);return function () {clearInterval(id);};}, []);
+  // ── BACKGROUND SharePoint AUTO-PULL ─────────────────────────────────────────
+  // Runs every 30 seconds regardless of which screen is open.
+  // Silently merges new SharePoint tickets into the shared pool.
+  // The existing 15s syncTick poll picks up the localStorage change automatically.
+  useEffect(function () {
+    var running = false;
+    async function bgPull() {
+      if (running) return;
+      running = true;
+      try {
+        var result = await agCloudAutoPull();
+        if (result && result.count > 0) {
+          // New tickets landed — trigger syncTick so agent view refreshes
+          setSyncTick(function (n) { return n + 1; });
+        }
+      } catch (e) {
+        // Silent — background pull failures don't interrupt the agent
+      } finally {
+        running = false;
+      }
+    }
+    var initTimer = setTimeout(bgPull, 2000);
+    var interval = setInterval(bgPull, 30000);
+    return function () { clearTimeout(initTimer); clearInterval(interval); };
+  }, []); // eslint-disable-line
+  // ─────────────────────────────────────────────────────────────────────────────
   // Re-load this agent's tickets whenever cross-tab sync fires (manager updates reflect in My Tickets)
   useEffect(function () {if (agent) setTicketsState(loadTix(agent.id));}, [syncTick]);
 
