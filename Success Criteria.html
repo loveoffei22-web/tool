@@ -131,11 +131,11 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
     </div>
     <div class="hd-text">
       <div class="hd-eyebrow">EKEDP Power App · Customer Experience · Marina HQ</div>
-      <div class="hd-title">Success Criteria — Version 2</div>
+      <div class="hd-title">Success Criteria — Version 3</div>
       <div class="hd-sub">What "good" looks like for this tool · How we measure it · Owners</div>
     </div>
     <div class="hd-meta">
-      <div class="big">May 2026</div>
+      <div class="big">June 2026</div>
       <div class="sm">Owner: Love Offei</div>
     </div>
   </div>
@@ -144,7 +144,7 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
   <div class="sec">
     <div class="sec-h"><div class="num">1</div><h2>Purpose</h2></div>
     <p class="lead">
-      A single shared tool that lets the Customer Experience team <b>log every customer complaint</b>, <b>route it to the right Responsible Party</b>, and <b>report up to the GM four times a day</b> (9 AM · 12 PM · 4 PM · 5 PM COB) — replacing scattered WhatsApp messages, Excel sheets and email threads with one synced source of truth.
+      A single shared tool that lets the Customer Experience team <b>log every customer complaint</b>, <b>route it to the right Responsible Party</b>, and <b>report up to the GM four times a day</b> (9 AM · 12 PM · 4 PM · 5 PM COB) — replacing scattered WhatsApp messages, Excel sheets and email threads with one synced source of truth. Now extended with <b>team roster management</b>, <b>agent performance tracking</b>, and <b>coverage gap detection</b>.
     </p>
   </div>
 
@@ -153,7 +153,7 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
     <div class="sec-h"><div class="num">2</div><h2>Users</h2></div>
     <div class="users">
       <div class="user-card"><div class="role">Manager</div><div class="name">Love Offei</div><div class="desc">Oversees team, sets shifts, runs daily GM reports, holds master sync key.</div></div>
-      <div class="user-card"><div class="role">CX Agents (5)</div><div class="name">Matthew · Racheal · Tomina · Esther · Loveth</div><div class="desc">Log complaints, update tickets, send Midday / COB WhatsApp slot reports.</div></div>
+      <div class="user-card"><div class="role">CX Agents (5)</div><div class="name">Matthew · Racheal · Tomina · Esther · Loveth</div><div class="desc">Log complaints, update tickets, send Midday / COB WhatsApp slot reports. View team roster &amp; shift calendar (read-only).</div></div>
       <div class="user-card"><div class="role">Recipient</div><div class="name">GM / Leadership</div><div class="desc">Receives the 9 AM, 12 PM and 4 PM Daily Email Report via Outlook.</div></div>
     </div>
   </div>
@@ -166,12 +166,12 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Every complaint is logged</b> in the app within 5 minutes of being received — no more Excel side-files.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>One source of truth</b> — Manager, all 5 Agents and the Daily Email Report all read from the same SharePoint list via Power Automate.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Every ticket has a Responsible Party</b> assigned — zero unassigned tickets at COB.</div></div>
-        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>≥ 80 % resolution rate</b> on tickets received in the same business day (rolling 7-day average).</div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>≥ 80 % resolution rate</b> on tickets received in the same business day (rolling 7-day average). Tracked live on the Manager Dashboard and Agent Leaderboard.</div></div>
       </div>
       <div class="ck-list">
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>9 AM, 12 PM, 4 PM and 5 PM reports sent to GM on time</b> — generated and copied to Outlook within 10 minutes of the slot.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Agent slot reports posted to WhatsApp</b> at every Weekday 2 PM / 5 PM and Weekend 1 PM / 4 PM checkpoint.</div></div>
-        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>No data loss</b> — tickets survive browser refresh, device swap, and offline pockets (local cache + cloud sync).</div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>No data loss</b> — tickets survive browser refresh, device swap, and offline pockets. All files are fully standalone HTML — deploy a single file, no assets folder required. <span style="display:none">x</span>, device swap, and offline pockets (local cache + cloud sync).</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>No credentials in source code</b> — Power Automate URLs stored on each device only via localStorage; all data stays within the company's Microsoft 365 environment.</div></div>
       </div>
     </div>
@@ -183,14 +183,16 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
     <div class="grid2">
       <div class="ck-list">
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Managers Hub</b> can log, edit, bulk-update, sort, filter, search every complaint; export JSON, CSV and Excel.</div></div>
-        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Agent shifts</b> set by Love (Day / Night / Off / Leave) sync to every Agent's device.</div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Team Roster &amp; Shift Calendar</b> — Manager sets shifts on a monthly Sun–Sat calendar; agents see a read-only copy with CSV import fallback.
+        </div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Performance Leaderboard</b> on the Agent Hub dashboard — ranked MTD resolution rates with bars, medals, and live ON/OFF shift badge.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Cumulative report</b> rolls up tickets by Responsible Party with % resolution; party list is editable in-app.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Slot Reports</b> produce a one-click WhatsApp message, a styled PDF and a 4-sheet Excel export.</div></div>
       </div>
       <div class="ck-list">
-        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Daily Email Report</b> auto-pulls live cloud data and is copy-pastable into Outlook with full formatting.</div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Daily Email Report</b> loads only on-demand; Grand Total column on all 4 slots; Outlook copy uses bgcolor headers that never turn black on paste.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Works on Android, iOS and desktop</b> browsers — no app install, no backend, no IT ticket.</div></div>
-        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Failure is visible</b> — sync errors show a banner; no silent data drops.</div></div>
+        <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Failure is visible</b> — sync errors show a banner; no silent data drops. Coverage gaps flagged 14 days in advance.</div></div>
         <div class="ck"><div class="ck-mark">✓</div><div class="ck-text"><b>Zero extra cost</b> — runs entirely on Microsoft 365 (Power Automate + SharePoint) already licensed by the company; no third-party cloud services.</div></div>
       </div>
     </div>
@@ -202,8 +204,8 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
     <div class="metrics">
       <div class="metric"><div class="val">≥ 80%</div><div class="lbl">Same-day Resolution</div></div>
       <div class="metric"><div class="val">100%</div><div class="lbl">Tickets Logged</div></div>
-      <div class="metric"><div class="val">3 / 3</div><div class="lbl">Daily Reports Sent</div></div>
-      <div class="metric"><div class="val">0</div><div class="lbl">Unassigned at COB</div></div>
+      <div class="metric"><div class="val">4 / 4</div><div class="lbl">Daily Reports Sent</div></div>
+      <div class="metric"><div class="val">≥ 3</div><div class="lbl">Agents on Shift Daily</div></div>
     </div>
   </div>
 
@@ -211,14 +213,14 @@ html,body{font-family:'Sora',sans-serif;background:#E5E7EB;color:var(--ink);-web
   <div class="sec">
     <div class="sec-h"><div class="num">6</div><h2>Out of Scope (Version 2)</h2></div>
     <p class="lead">
-      No customer-facing portal · No SMS/email automation to customers · No SLA-timer engine · No multi-team / multi-BU role permissions · No native mobile app · No SAP / SharePoint integration. These are candidates for Version 3.
+      No customer-facing portal · No SMS/email automation to customers · No SLA-timer engine · No multi-team / multi-BU role permissions · No native mobile app · No SAP / SharePoint integration (Power Automate only). These are candidates for Version 4.
     </p>
   </div>
 
   <!-- Footer -->
   <div class="foot">
     <div>EKEDP Power App · Customer Experience · Marina HQ</div>
-    <div class="pill">v2.0 · May 2026</div>
+    <div class="pill">v3.0 · June 2026</div>
     <div>Owner: Love Offei</div>
   </div>
 
