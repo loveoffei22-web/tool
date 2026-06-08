@@ -600,7 +600,7 @@ function saveTix(id, tix) {
   // Also keep legacy key as backup
   try {localStorage.setItem('ek_tix_' + id, JSON.stringify(tix));} catch (e) {}
 }
-function loadShifts() {try {return JSON.parse(localStorage.getItem('ek_v2_shifts') || '{}');} catch {return {};}
+function loadShifts() {try {return JSON.parse(localStorage.getItem('ek_v2_shifts') || '{}');} catch {return {};}}
 // ── BACKGROUND SharePoint AUTO-PULL (global, screen-independent) ─────────────
 async function agCloudAutoPull() {
   var url = localStorage.getItem('ek_pa_pull_url');
