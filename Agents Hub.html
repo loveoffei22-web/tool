@@ -3434,6 +3434,7 @@ function App() {
     const body = {
       num: String(t.num || ''),
       status: t.status === 'resolved' ? 'RESOLVED' : t.status === 'progress' ? 'IN PROGRESS' : 'UNRESOLVED',
+      appStatus: t.status === 'resolved' ? 'RESOLVED' : t.status === 'progress' ? 'IN PROGRESS' : 'UNRESOLVED',
       responsible: t.resp || '',
       actionTaken: t.note || '',
       resolvedBy: t.status === 'resolved' ? t.resp || agent.name : '',
