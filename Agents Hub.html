@@ -609,6 +609,44 @@ var EK_PULL_MONTH_URL = 'https://defaultb841de22e0c340c5b3fec287594b46.49.enviro
 if (!localStorage.getItem('ek_pa_push_url')) localStorage.setItem('ek_pa_push_url', EK_PUSH_URL);
 if (!localStorage.getItem('ek_pa_pull_url')) localStorage.setItem('ek_pa_pull_url', EK_PULL_DAY_URL);
 // ─────────────────────────────────────────────────────────────────────────────
+// ── SharePoint field normaliser ──────────────────────────────────────────────
+function normSPTicket(t, agentOverride) {
+  // Choice columns come back as {Value:"..."} objects from PA
+  function choiceVal(v) { return v && typeof v === 'object' ? (v.Value || '') : (v || ''); }
+  var appSt = choiceVal(t.APPStatus || t.appStatus || '');
+  var spSt  = choiceVal(t.Status    || t.status    || '');
+  var rawSt = appSt || spSt;
+  var status = rawSt === 'RESOLVED'   || rawSt === 'Resolved'    || rawSt === 'Closed'      ? 'resolved'
+             : rawSt === 'IN PROGRESS'|| rawSt === 'In Progress' || rawSt === 'Assigned'    ? 'progress'
+             : rawSt === 'UNRESOLVED' || rawSt === 'Pending'                                ? 'unresolved'
+             : 'unresolved';
+  var cat  = choiceVal(t.ComplaintCategory  || t.complaintCategory  || t.category  || '');
+  var resp = choiceVal(t.Responsible_x0020_Party || t.responsibleParty || t.resp    || '');
+  var issue= t.ComplaintDescription || t.complaintDescription || t.issue || t.description || t.Description || t.Title || t.title || '';
+  var note = t.ActionTaken || t.actionTaken || t.resolutionNote || '';
+  var resolvedDate = t.ResolvedDate || t.resolvedDate || '';
+  var resolvedBy   = t.Resolvedby  || t.resolvedBy   || t.resolvedby || '';
+  return Object.assign({}, t, {
+    id:     t.id || 'tk_' + (t.num || t.ID || ''),
+    num:    String(t.num || t.ID || t.id || ''),
+    name:   t.CustomerName    || t.customerName    || t.name    || '',
+    phone:  (t.TelephoneNumber|| t.telephoneNumber || t.phone   || '').replace(/^\+234/, '0'),
+    meter:  t.meter  || '',
+    addr:   t.CustomerAddress || t.addr || '',
+    bu:     choiceVal(t.BusinessUnit || t.businessUnit || '') || t.bu || '',
+    channel:choiceVal(t.ChannelofComplaint || t.channelOfComplaint || t.channel || ''),
+    issue:  issue,
+    note:   note,
+    category:    cat,
+    resp:        resp,
+    status:      status,
+    resolvedDate:resolvedDate,
+    resolvedBy:  resolvedBy,
+    agent:  agentOverride || t.agent || t.agentId || 'manager',
+    created:t.Created || t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.timestamp || ''
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 // ── BACKGROUND SharePoint AUTO-PULL (global, screen-independent) ─────────────
 async function agCloudAutoPull(overrideUrl) {
   var url = overrideUrl || localStorage.getItem('ek_pa_pull_url');
@@ -620,20 +658,14 @@ async function agCloudAutoPull(overrideUrl) {
   var normalized = {};
   if (Array.isArray(cloud1.manager)) {
     normalized = { manager: cloud1.manager.map(function (t) {
-      var s = (t.status || t.Status || '');
-      return Object.assign({}, t, {
-        id: t.id || 'tk_mgr_' + t.num,
-        agent: t.agent || 'manager',
-        issue: t.issue || t.description || t.Description || t.note || '',
-        status: s === 'Closed' || s === 'Resolved' || s === 'resolved' ? 'resolved' : s === 'Assigned' || s === 'In Progress' || s === 'progress' ? 'progress' : 'unresolved',
-        created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || ''
-      });
-    })};
+      var ticket = (t.inputs && t.inputs.value) ? t.inputs.value : t;
+      return normSPTicket(ticket, ticket.agent || 'manager');
+    }) };
   } else if (Array.isArray(cloud1.days)) {
     var flat = [];
     cloud1.days.forEach(function (day) {
       (day.tickets || []).forEach(function (t) {
-        flat.push({ id: t.id || 'tk_' + t.num, num: t.num || '', name: t.name || '', phone: (t.phone || '').replace(/^\+234/, '0'), meter: t.meter || '', addr: t.address || t.addr || '', bu: t.bu || '', issue: t.note || t.title || '', resp: t.assignee || '', category: t.category || '', status: (function (s) {s = s || '';return s === 'Closed' || s === 'Resolved' ? 'resolved' : s === 'Assigned' || s === 'In Progress' ? 'progress' : 'unresolved';})(t.status || t.Status || ''), note: t.resolutionNote || '', agent: 'manager', day: day.dayNum || new Date().getDate(), created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || '' });
+        flat.push(Object.assign(normSPTicket(t, t.agent || 'manager'), { day: day.dayNum || new Date().getDate() }));
       });
     });
     normalized = { manager: flat };
@@ -672,7 +704,7 @@ async function agCloudAutoPull(overrideUrl) {
   });
   if (added > 0 || updated > 0) {try {localStorage.setItem('ek_v2_tickets', JSON.stringify(existing));} catch (e) {}}
   try {localStorage.setItem('ek_last_sync', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }));} catch (e) {}
-  return { count: added };
+  return { count: added + updated };
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // De-dup: ticket number is the sole key when present; fall back to full sig only for numberless tickets
@@ -2614,38 +2646,15 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
       var normalized1 = {};
       if (Array.isArray(cloud1.manager)) {
         // Pull All returns {manager:[tickets]} — assign each ticket correct agent from AssignedTo field
-        var flatAll = cloud1.manager.map(function (t) {
-          var spStatus = t.status || t.Status || '';
-          return Object.assign({}, t, {
-            id: t.id || 'tk_mgr_' + t.num,
-            agent: t.agent || 'manager',
-            issue: t.issue || t.description || t.Description || t.note || '',
-            status: function (s) {s = s || '';return s === 'Closed' || s === 'Resolved' ? 'resolved' : s === 'Assigned' || s === 'In Progress' || s === 'progress' ? 'progress' : 'unresolved';}(spStatus)
-          });
-        });
-        normalized1 = { manager: flatAll };
+        normalized1 = { manager: cloud1.manager.map(function (t) {
+          var ticket = (t.inputs && t.inputs.value) ? t.inputs.value : t;
+          return normSPTicket(ticket, ticket.agent || 'manager');
+        }) };
       } else if (Array.isArray(cloud1.days)) {
         var flatTickets = [];
         cloud1.days.forEach(function (day) {
           (day.tickets || []).forEach(function (t) {
-            flatTickets.push({
-              id: t.id || 'tk_' + t.num,
-              num: t.num || '',
-              created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || '',
-              time: t.time || '',
-              name: t.name || '',
-              phone: (t.phone || '').replace(/^\+234/, '0'),
-              meter: t.meter || '',
-              addr: t.address || t.addr || '',
-              bu: t.bu || '',
-              issue: t.note || t.title || '',
-              resp: t.assignee || '',
-              category: t.category && t.subcategory ? t.category + ' — ' + t.subcategory : t.category || '',
-              status: function (s) {s = s || '';return s === 'Closed' ? 'resolved' : s === 'Resolved' ? 'resolved' : s === 'Assigned' ? 'progress' : s === 'In Progress' ? 'progress' : s === 'Pending' ? 'unresolved' : 'unresolved';}(t.status || t.Status || ''),
-              note: t.resolutionNote || '',
-              agent: 'manager',
-              day: day.dayNum || new Date().getDate()
-            });
+            flatTickets.push(Object.assign(normSPTicket(t, t.agent || 'manager'), { day: day.dayNum || new Date().getDate() }));
           });
         });
         normalized1 = { manager: flatTickets };
@@ -3412,12 +3421,10 @@ function App() {
         var pullUrl = initialDone ? EK_PULL_DAY_URL : EK_PULL_MONTH_URL;
         var result = await agCloudAutoPull(pullUrl);
         if (!initialDone) {
-          // Mark first pull complete — switch to daily from now on
           localStorage.setItem('ek_initial_pull_done', '1');
         }
-        if (result && result.count > 0) {
-          setSyncTick(function (n) { return n + 1; });
-        }
+        // Always refresh UI after a pull — even if all tickets were just updated
+        setSyncTick(function (n) { return n + 1; });
       } catch (e) {
         // Silent — background pull failures don't interrupt the agent
       } finally {
