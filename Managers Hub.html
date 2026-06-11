@@ -947,6 +947,9 @@ var EK_AGENT_PHOTOS = {
 
 
 
+
+
+
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ── DUTY WINDOW ─────────────────────────────────────────────
@@ -1130,6 +1133,10 @@ function Signin({ onSignIn }) {
         <a href="Agents Hub.html" style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', background: 'rgba(255,199,44,.07)', border: '1px solid rgba(255,199,44,.25)', borderRadius: 10, font: '700 12px Sora,sans-serif', color: 'var(--ek-gold)', textDecoration: 'none', transition: 'all .15s' }}
         onMouseEnter={function (e) {e.currentTarget.style.background = 'rgba(255,199,44,.14)';}}
         onMouseLeave={function (e) {e.currentTarget.style.background = 'rgba(255,199,44,.07)';}}>👥 Go to Agents Hub →
+        </a>
+        <a href="Daily Email Report.html" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.25)', borderRadius: 10, font: '700 12px Sora,sans-serif', color: '#93C5FD', textDecoration: 'none', transition: 'all .15s' }}
+        onMouseEnter={function (e) {e.currentTarget.style.background = 'rgba(59,130,246,.14)';}}
+        onMouseLeave={function (e) {e.currentTarget.style.background = 'rgba(59,130,246,.07)';}}>📧 Daily Email Report →
         </a>
         <a href="index.html" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '9px', border: '1px solid var(--border)', borderRadius: 10, font: '600 11px Sora,sans-serif', color: 'var(--muted)', textDecoration: 'none', transition: 'all .15s' }}
         onMouseEnter={function (e) {e.currentTarget.style.borderColor = 'var(--ek-gold)';}}
@@ -1369,7 +1376,7 @@ function Dashboard({ tickets, carryTix, shifts, onShift, onSettings, onNav, sign
         const todayList = tickets.filter(function (t) {return ticketDate(t) === watTodayStr;});
         const todayResolved = todayList.filter(function (t) {return t.status === 'resolved';}).length;
         const todayRate = todayList.length ? Math.round(todayResolved / todayList.length * 100) : 0;
-        const reportsSent = (h >= 9 ? 1 : 0) + (h >= 12 ? 1 : 0) + (h >= 17 ? 1 : 0);
+        const reportsSent = (h >= 9 ? 1 : 0) + (h >= 12 ? 1 : 0) + (h >= 16 ? 1 : 0) + (h >= 17 ? 1 : 0);
         const unassigned = todayList.filter(function (t) {
           const r = (t.responsible || t.resp || '').toString().trim();
           return !r || r.toLowerCase() === 'customer experience' && !t.responsible && !t.resp;
@@ -1378,7 +1385,7 @@ function Dashboard({ tickets, carryTix, shifts, onShift, onSettings, onNav, sign
         const SCORE = [
         { l: 'Same-day Resolution', v: todayList.length ? todayRate + '%' : '—', sub: 'target ≥ 80%', ok: todayRate >= 80 && todayList.length > 0, warn: todayList.length > 0 && todayRate < 80, c: '#22C55E' },
         { l: 'Tickets Logged Today', v: todayList.length, sub: 'received today (WAT)', ok: todayList.length > 0, warn: false, c: '#60A5FA' },
-        { l: 'Daily Reports Sent', v: reportsSent + ' / 3', sub: '9 AM · 12 PM · 4 PM', ok: reportsSent === 3, warn: isCOB && reportsSent < 3, c: '#FBBF24' },
+        { l: 'Daily Reports Sent', v: reportsSent + ' / 4', sub: '9 AM · 12 PM · 4 PM · 5 PM COB', ok: reportsSent === 4, warn: isCOB && reportsSent < 4, c: '#FBBF24' },
         { l: 'Unassigned at COB', v: unassigned, sub: isCOB ? 'target = 0' : 'check at 4 PM', ok: unassigned === 0, warn: isCOB && unassigned > 0, c: '#A78BFA' }];
 
         return (
@@ -1590,155 +1597,216 @@ function Dashboard({ tickets, carryTix, shifts, onShift, onSettings, onNav, sign
 
 // ── MONTHLY REPORT (replaces Daily Report) ────────────────────────
 // ── MANAGER DAILY REPORT ───────────────────────────────────────────
-function ManagerDailyReport({ tickets, showToast }) {
-  var watNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
-  var todayStr=watNow.getFullYear()+'-'+String(watNow.getMonth()+1).padStart(2,'0')+'-'+String(watNow.getDate()).padStart(2,'0');
-  var dateLabel=watNow.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  var [syncing,setSyncing]=React.useState(false);
-  var [syncMsg,setSyncMsg]=React.useState('');
-  async function syncNow(){
+function ManagerDailyReport({ tickets, showToast, shifts }) {
+  var watNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
+  var todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth() + 1).padStart(2, '0') + '-' + String(watNow.getDate()).padStart(2, '0');
+  // Agents on duty today (day or shadow shift)
+  var onDutyToday = EK_AGENTS.filter(function(a) {
+    var s = localStorage.getItem('ek_sched_' + a.id + '_' + todayStr);
+    if (!s && typeof EK_ROSTER_SEED !== 'undefined' && EK_ROSTER_SEED[a.id]) s = EK_ROSTER_SEED[a.id][todayStr];
+    if (!s && shifts) s = shifts[a.id];
+    return s === 'day' || s === 'shadow';
+  });
+  var todayStr = watNow.getFullYear() + '-' + String(watNow.getMonth() + 1).padStart(2, '0') + '-' + String(watNow.getDate()).padStart(2, '0');
+  var dateLabel = watNow.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  var [syncing, setSyncing] = React.useState(false);
+  var [syncMsg, setSyncMsg] = React.useState('');
+  var [sending, setSending] = React.useState(false);
+  var [sendMsg, setSendMsg] = React.useState('');
+  var [selSlot, setSelSlot] = React.useState(function(){
+    var h = watNow.getHours();
+    return h < 10 ? '9 AM' : h < 13 ? '12 PM' : h < 16 ? '12 PM' : h < 17 ? '4 PM' : '5 PM COB';
+  });
+  async function sendToGM() {
+    var rptUrl = localStorage.getItem('ek_pa_report_url') || '';
+    if (!rptUrl) { setSendMsg('⚠️ Set Report Email URL in Cloud Sync first'); setTimeout(function(){setSendMsg('');},4000); return; }
+    setSending(true); setSendMsg('');
+    try {
+      var payload = {
+        slot: selSlot, date: todayStr, dateLabel: dateLabel,
+        total: total, resolved: res, inProgress: prg, unresolved: unr, resolutionRate: rate,
+        agentBreakdown: agentRows.map(function(r){return {name:r[0],total:r[1].total,resolved:r[1].res,inProgress:r[1].prg,unresolved:r[1].unr,rate:r[1].total?Math.round(r[1].res/r[1].total*100):0};}),
+        sentAt: new Date().toISOString()
+      };
+      var resp = await fetch(rptUrl, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      setSendMsg('✅ Sent to GM (' + selSlot + ')');
+    } catch(e) { setSendMsg('❌ ' + e.message); }
+    setSending(false);
+    setTimeout(function(){setSendMsg('');},5000);
+  }
+  async function syncNow() {
     setSyncing(true);setSyncMsg('');
-    try{
-      var r=await ekCloudAutoPull();
-      setSyncMsg(r&&r.count>0?'✅ '+r.count+' updated':'✅ Up to date');
-    }catch(e){setSyncMsg('⚠️ Sync failed');}
+    try {
+      var r = await ekCloudAutoPull();
+      setSyncMsg(r && r.count > 0 ? '✅ ' + r.count + ' updated' : '✅ Up to date');
+    } catch (e) {setSyncMsg('⚠️ Sync failed');}
     setSyncing(false);
   }
-  var todayTix=tickets.filter(function(t){var d=String(t.created||t.receivedAt||t.loggedAt||'').slice(0,10);return d===todayStr;});
-  var total=todayTix.length;
-  var res=todayTix.filter(function(t){return t.status==='resolved';}).length;
-  var prg=todayTix.filter(function(t){return t.status==='progress';}).length;
-  var unr=todayTix.filter(function(t){return t.status==='unresolved';}).length;
-  var rate=total>0?Math.round(res/total*100):0;
-  var unworked=todayTix.filter(function(t){return t.status==='unresolved'&&!t.note&&!t.resp&&!t.updatedAt;});
-  var agentMap={};todayTix.forEach(function(t){var k=t.resp||'Unassigned';if(!agentMap[k])agentMap[k]={total:0,res:0,prg:0,unr:0};agentMap[k].total++;if(t.status==='resolved')agentMap[k].res++;else if(t.status==='progress')agentMap[k].prg++;else agentMap[k].unr++;});
-  var agentRows=Object.entries(agentMap).sort(function(a,b){return b[1].total-a[1].total;});
-  var buMap={};todayTix.forEach(function(t){buMap[t.bu]=(buMap[t.bu]||0)+1;});
-  function rc(r){return r>=80?'#4ADE80':r>=50?'#FCD34D':'#F87171';}
-  return(
+  // Use the operational duty window (same as dashboard) so Daily Report matches
+  // the team's definition of 'today': prev-day 5:01 PM → today 5:00 PM WAT.
+  var dutyW = getDutyWindow();
+  var todayTix = tickets.filter(function (t) {
+    var raw = t.created || t.receivedAt || t.loggedAt || '';
+    if (!raw) return false;
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) {
+      // fallback: compare WAT calendar date
+      var s = String(raw).slice(0, 10);
+      return s === todayStr;
+    }
+    var watD = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
+    return watD >= dutyW.start && watD <= dutyW.end;
+  });
+  var total = todayTix.length;
+  var res = todayTix.filter(function (t) {return t.status === 'resolved';}).length;
+  var prg = todayTix.filter(function (t) {return t.status === 'progress';}).length;
+  var unr = todayTix.filter(function (t) {return t.status === 'unresolved';}).length;
+  var rate = total > 0 ? Math.round(res / total * 100) : 0;
+  var unworked = todayTix.filter(function (t) {return t.status === 'unresolved' && !t.note && !t.resp && !t.updatedAt;});
+  var agentMap = {};todayTix.forEach(function (t) {var k = t.resp || 'Unassigned';if (!agentMap[k]) agentMap[k] = { total: 0, res: 0, prg: 0, unr: 0 };agentMap[k].total++;if (t.status === 'resolved') agentMap[k].res++;else if (t.status === 'progress') agentMap[k].prg++;else agentMap[k].unr++;});
+  var agentRows = Object.entries(agentMap).sort(function (a, b) {return b[1].total - a[1].total;});
+  var buMap = {};todayTix.forEach(function (t) {buMap[t.bu] = (buMap[t.bu] || 0) + 1;});
+  function rc(r) {return r >= 80 ? '#4ADE80' : r >= 50 ? '#FCD34D' : '#F87171';}
+  return (
     <div>
-      <div style={{background:'var(--ek-grad-hero-midnight)',padding:'14px 28px 12px',borderBottom:'1px solid var(--border)'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+      <div style={{ background: 'var(--ek-grad-hero-midnight)', padding: '14px 28px 12px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{font:'700 10px Sora,sans-serif',color:'var(--muted)',letterSpacing:'.12em',textTransform:'uppercase',marginBottom:4}}>DAILY REPORT · {dateLabel.toUpperCase()}</div>
-            <div style={{font:'italic 800 22px/1 Sora,sans-serif',color:'#fff'}}>📋 Daily Operations Report</div>
-            <div style={{font:'500 10px Sora,sans-serif',color:'var(--muted)',marginTop:4}}>EKEDP Customer Experience · Marina HQ</div>
+            <div style={{ font: '700 10px Sora,sans-serif', color: 'var(--muted)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>DAILY REPORT · {dateLabel.toUpperCase()}</div>
+            <div style={{ font: 'italic 800 22px/1 Sora,sans-serif', color: '#fff' }}>📋 Daily Operations Report</div>
+            <div style={{ font: '500 10px Sora,sans-serif', color: 'var(--muted)', marginTop: 4 }}>EKEDP Customer Experience · Marina HQ</div>
+            {onDutyToday.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <span style={{ font: '700 9px Sora,sans-serif', color: 'var(--ek-gold)', letterSpacing: '.12em', textTransform: 'uppercase' }}>On Duty Today:</span>
+              {onDutyToday.map(function(a) {
+                var s = localStorage.getItem('ek_sched_' + a.id + '_' + todayStr) || (typeof EK_ROSTER_SEED !== 'undefined' && EK_ROSTER_SEED[a.id] && EK_ROSTER_SEED[a.id][todayStr]) || (shifts && shifts[a.id]);
+                return <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', background: s === 'shadow' ? 'rgba(129,140,248,.15)' : 'rgba(253,224,71,.12)', border: '1px solid ' + (s === 'shadow' ? 'rgba(129,140,248,.35)' : 'rgba(253,224,71,.3)'), borderRadius: 20, font: '700 10px Sora,sans-serif', color: s === 'shadow' ? '#A5B4FC' : '#FDE047' }}>
+                  {s === 'shadow' ? '🌙' : '☀️'} {a.name.split(' ')[0]}
+                </span>;
+              })}
+            </div>}
+            {onDutyToday.length === 0 && <div style={{ marginTop: 8, font: '600 10px Sora,sans-serif', color: 'rgba(239,68,68,.7)' }}>⚠️ No agents scheduled today — check roster</div>}
           </div>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {syncMsg&&<span style={{font:'600 10px Sora,sans-serif',color:syncMsg.startsWith('✅')?'#4ADE80':'#F87171'}}>{syncMsg}</span>}
-            <button onClick={syncNow} disabled={syncing} style={{padding:'8px 14px',background:syncing?'rgba(255,255,255,.05)':'rgba(34,197,94,.12)',border:'1px solid '+(syncing?'var(--border)':'rgba(34,197,94,.3)'),borderRadius:8,color:syncing?'var(--muted)':'#4ADE80',font:'700 11px Sora,sans-serif',cursor:syncing?'not-allowed':'pointer'}}>{syncing?'⟳ Syncing…':'⬇ SharePoint'}</button>
-            <button onClick={function(){window.print();}} style={{padding:'8px 14px',background:'rgba(255,255,255,.06)',border:'1px solid var(--border)',borderRadius:8,color:'var(--muted)',font:'700 11px Sora,sans-serif',cursor:'pointer'}}>🖨 Print</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {sendMsg && <span style={{ font: '600 10px Sora,sans-serif', color: sendMsg.startsWith('✅') ? '#4ADE80' : '#F87171', maxWidth: 180 }}>{sendMsg}</span>}
+            <select value={selSlot} onChange={function(e){setSelSlot(e.target.value);}} style={{ height: 34, padding: '0 8px', background: 'var(--surface)', border: '1px solid var(--bsoft)', borderRadius: 7, color: 'var(--text)', font: '700 11px Sora,sans-serif', outline: 'none' }}>
+              {['9 AM','12 PM','4 PM','5 PM COB'].map(function(s){return <option key={s} value={s}>{s}</option>;})}
+            </select>
+            <button onClick={sendToGM} disabled={sending} style={{ padding: '8px 14px', background: sending ? 'rgba(255,255,255,.05)' : 'rgba(59,130,246,.18)', border: '1px solid ' + (sending ? 'var(--border)' : 'rgba(59,130,246,.4)'), borderRadius: 8, color: sending ? 'var(--muted)' : '#93C5FD', font: '700 11px Sora,sans-serif', cursor: sending ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{sending ? '⏳ Sending…' : '📤 Send to GM'}</button>
+            {syncMsg && <span style={{ font: '600 10px Sora,sans-serif', color: syncMsg.startsWith('✅') ? '#4ADE80' : '#F87171' }}>{syncMsg}</span>}
+            <button onClick={syncNow} disabled={syncing} style={{ padding: '8px 14px', background: syncing ? 'rgba(255,255,255,.05)' : 'rgba(34,197,94,.12)', border: '1px solid ' + (syncing ? 'var(--border)' : 'rgba(34,197,94,.3)'), borderRadius: 8, color: syncing ? 'var(--muted)' : '#4ADE80', font: '700 11px Sora,sans-serif', cursor: syncing ? 'not-allowed' : 'pointer' }}>{syncing ? '⟳ Syncing…' : '⬇ SharePoint'}</button>
+            <button onClick={function () {window.print();}} style={{ padding: '8px 14px', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', font: '700 11px Sora,sans-serif', cursor: 'pointer' }}>🖨 Print</button>
           </div>
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,padding:'14px 28px 0'}}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, padding: '14px 28px 0' }}>
         {[
-          {l:'TOTAL',v:total,c:'#93C5FD',bg:'rgba(59,130,246,.12)',bd:'rgba(59,130,246,.3)'},
-          {l:'RESOLVED',v:res,c:'#4ADE80',bg:'rgba(34,197,94,.1)',bd:'rgba(34,197,94,.3)'},
-          {l:'IN PROGRESS',v:prg,c:'#FCD34D',bg:'rgba(245,158,11,.1)',bd:'rgba(245,158,11,.3)'},
-          {l:'UNRESOLVED',v:unr,c:'#F87171',bg:'rgba(239,68,68,.1)',bd:'rgba(239,68,68,.3)'},
-          {l:'RESOLUTION RATE',v:rate+'%',c:rc(rate),bg:'rgba(99,102,241,.1)',bd:'rgba(99,102,241,.3)'}
-        ].map(function(k){return(
-          <div key={k.l} style={{background:k.bg,border:'1px solid '+k.bd,borderRadius:12,padding:'14px 16px'}}>
-            <div style={{font:'700 9px Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8}}>{k.l}</div>
-            <div style={{font:"800 28px/1 'JetBrains Mono',monospace",color:k.c}}>{k.v}</div>
-          </div>
-        );})}
+        { l: 'TOTAL', v: total, c: '#93C5FD', bg: 'rgba(59,130,246,.12)', bd: 'rgba(59,130,246,.3)' },
+        { l: 'RESOLVED', v: res, c: '#4ADE80', bg: 'rgba(34,197,94,.1)', bd: 'rgba(34,197,94,.3)' },
+        { l: 'IN PROGRESS', v: prg, c: '#FCD34D', bg: 'rgba(245,158,11,.1)', bd: 'rgba(245,158,11,.3)' },
+        { l: 'UNRESOLVED', v: unr, c: '#F87171', bg: 'rgba(239,68,68,.1)', bd: 'rgba(239,68,68,.3)' },
+        { l: 'RESOLUTION RATE', v: rate + '%', c: rc(rate), bg: 'rgba(99,102,241,.1)', bd: 'rgba(99,102,241,.3)' }].
+        map(function (k) {return (
+            <div key={k.l} style={{ background: k.bg, border: '1px solid ' + k.bd, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>{k.l}</div>
+            <div style={{ font: "800 28px/1 'JetBrains Mono',monospace", color: k.c }}>{k.v}</div>
+          </div>);
+        })}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 290px',gap:14,padding:'14px 28px 28px'}}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: 14, padding: '14px 28px 28px' }}>
         <div>
-          <div style={{font:'700 10px Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.12em',marginBottom:10}}>🎯 RESOLUTION BY RESPONSIBLE PARTY</div>
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden'}}>
-            <table className="tbl" style={{width:'100%'}}>
+          <div style={{ font: '700 10px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 10 }}>🎯 RESOLUTION BY RESPONSIBLE PARTY</div>
+          <div className="card" style={{ borderRadius: 12, overflow: 'hidden' }}>
+            <table className="tbl" style={{ width: '100%' }}>
               <thead><tr>
-                <th style={{textAlign:'left',padding:'10px 14px'}}>RESPONSIBLE PARTY</th>
-                <th style={{textAlign:'center'}}>TOTAL</th><th style={{textAlign:'center'}}>RESOLVED</th>
-                <th style={{textAlign:'center'}}>IN PROG</th><th style={{textAlign:'center'}}>OPEN</th>
-                <th style={{textAlign:'right',padding:'10px 14px'}}>RATE</th>
+                <th style={{ textAlign: 'left', padding: '10px 14px' }}>RESPONSIBLE PARTY</th>
+                <th style={{ textAlign: 'center' }}>TOTAL</th><th style={{ textAlign: 'center' }}>RESOLVED</th>
+                <th style={{ textAlign: 'center' }}>IN PROG</th><th style={{ textAlign: 'center' }}>OPEN</th>
+                <th style={{ textAlign: 'right', padding: '10px 14px' }}>RATE</th>
               </tr></thead>
               <tbody>
-                {agentRows.map(function(entry){
-                  var n=entry[0];var s=entry[1];
-                  var r=s.total>0?Math.round(s.res/s.total*100):0;
-                  return(
-                    <tr key={n} style={{borderBottom:'1px solid var(--border)'}}>
-                      <td style={{padding:'10px 14px',fontWeight:700,color:'var(--text)'}}>{n}</td>
-                      <td style={{textAlign:'center',font:"700 14px 'JetBrains Mono',monospace",color:'var(--text)'}}>{s.total}</td>
-                      <td style={{textAlign:'center',font:"700 14px 'JetBrains Mono',monospace",color:'#4ADE80'}}>{s.res}</td>
-                      <td style={{textAlign:'center',font:"700 14px 'JetBrains Mono',monospace",color:'#FCD34D'}}>{s.prg}</td>
-                      <td style={{textAlign:'center',font:"700 14px 'JetBrains Mono',monospace",color:'#F87171'}}>{s.unr}</td>
-                      <td style={{padding:'10px 14px'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,justifyContent:'flex-end'}}>
-                          <div style={{width:60,height:6,background:'rgba(255,255,255,.07)',borderRadius:3,overflow:'hidden'}}><div style={{height:'100%',width:r+'%',background:rc(r),borderRadius:3,transition:'width .6s'}}/></div>
-                          <span style={{font:"700 13px 'JetBrains Mono',monospace",color:rc(r),minWidth:40,textAlign:'right'}}>{r}%</span>
+                {agentRows.map(function (entry) {
+                  var n = entry[0];var s = entry[1];
+                  var r = s.total > 0 ? Math.round(s.res / s.total * 100) : 0;
+                  return (
+                    <tr key={n} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text)' }}>{n}</td>
+                      <td style={{ textAlign: 'center', font: "700 14px 'JetBrains Mono',monospace", color: 'var(--text)' }}>{s.total}</td>
+                      <td style={{ textAlign: 'center', font: "700 14px 'JetBrains Mono',monospace" }}><span style={{ color: '#22C55E' }}>{s.res}</span></td>
+                      <td style={{ textAlign: 'center', font: "700 14px 'JetBrains Mono',monospace" }}><span style={{ color: '#D97706' }}>{s.prg}</span></td>
+                      <td style={{ textAlign: 'center', font: "700 14px 'JetBrains Mono',monospace" }}><span style={{ color: '#EF4444' }}>{s.unr}</span></td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                          <div style={{ width: 60, height: 6, background: 'rgba(255,255,255,.07)', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', width: r + '%', background: rc(r), borderRadius: 3, transition: 'width .6s' }} /></div>
+                          <span style={{ font: "700 13px 'JetBrains Mono',monospace", color: rc(r), minWidth: 40, textAlign: 'right' }}>{r}%</span>
                         </div>
                       </td>
-                    </tr>
-                  );
+                    </tr>);
+
                 })}
-                {!agentRows.length&&<tr><td colSpan={6} style={{padding:'32px',textAlign:'center',color:'var(--muted)',font:'500 12px Sora,sans-serif'}}>No tickets logged today yet.</td></tr>}
+                {!agentRows.length && <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', font: '500 12px Sora,sans-serif' }}>No tickets logged today yet.</td></tr>}
               </tbody>
             </table>
           </div>
-          {unworked.length>0&&(
-            <div style={{marginTop:14,background:'rgba(239,68,68,.07)',border:'1px solid rgba(239,68,68,.3)',borderRadius:12,overflow:'hidden'}}>
-              <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(239,68,68,.2)',display:'flex',alignItems:'center',gap:8}}>
-                <span>🔴</span><span style={{font:'700 10px Sora,sans-serif',color:'#F87171',textTransform:'uppercase',letterSpacing:'.1em'}}>Unresolved — Action Needed · {unworked.length}</span>
+          {unworked.length > 0 &&
+          <div style={{ marginTop: 14, background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(239,68,68,.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🔴</span><span style={{ font: '700 10px Sora,sans-serif', color: '#F87171', textTransform: 'uppercase', letterSpacing: '.1em' }}>Unresolved — Action Needed · {unworked.length}</span>
               </div>
-              <div style={{maxHeight:200,overflowY:'auto'}}>
-                {unworked.map(function(t){return(
-                  <div key={t.id} style={{padding:'8px 14px',borderBottom:'1px solid rgba(239,68,68,.1)',display:'grid',gridTemplateColumns:'auto 1fr auto auto',gap:10,alignItems:'center'}}>
-                    <span style={{font:"700 12px/1 'JetBrains Mono',monospace",color:'#F87171'}}>#{t.num}</span>
-                    <div><div style={{font:'600 11px Sora,sans-serif',color:'var(--text)'}}>{t.name}</div><div style={{font:'500 10px Sora,sans-serif',color:'var(--muted)'}}>{t.category||t.issue||'—'}</div></div>
-                    <span style={{font:'600 10px Sora,sans-serif',color:'var(--muted)'}}>{t.bu}</span>
-                    <span style={{font:'500 10px Sora,sans-serif',color:'var(--muted)'}}>{(t.time||'').replace(/\s+(AM|PM)/i,'$1')}</span>
-                  </div>
-                );})
-                }
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {unworked.map(function (t) {return (
+                  <div key={t.id} style={{ padding: '8px 14px', borderBottom: '1px solid rgba(239,68,68,.1)', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 10, alignItems: 'center' }}>
+                    <span style={{ font: "700 12px/1 'JetBrains Mono',monospace", color: '#F87171' }}>#{t.num}</span>
+                    <div><div style={{ font: '600 11px Sora,sans-serif', color: 'var(--text)' }}>{t.name}</div><div style={{ font: '500 10px Sora,sans-serif', color: 'var(--muted)' }}>{t.category || t.issue || '—'}</div></div>
+                    <span style={{ font: '600 10px Sora,sans-serif', color: 'var(--muted)' }}>{t.bu}</span>
+                    <span style={{ font: '500 10px Sora,sans-serif', color: 'var(--muted)' }}>{(t.time || '').replace(/\s+(AM|PM)/i, '$1')}</span>
+                  </div>);
+              })
+              }
               </div>
             </div>
-          )}
+          }
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:12}}>
-            <div style={{padding:'10px 14px',borderBottom:'1px solid var(--border)'}}><span style={{font:'700 10px Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em'}}>BY BUSINESS UNIT</span></div>
-            <div style={{padding:'12px 14px'}}>
-              {Object.entries(buMap).sort(function(a,b){return b[1]-a[1];}).map(function(e){return(
-                <div key={e[0]} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}><span style={{ font: '700 10px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>BY BUSINESS UNIT</span></div>
+            <div style={{ padding: '12px 14px' }}>
+              {Object.entries(buMap).sort(function (a, b) {return b[1] - a[1];}).map(function (e) {return (
+                  <div key={e[0]} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <BuPill bu={e[0]} />
-                  <div style={{flex:1,height:6,background:'rgba(255,255,255,.07)',borderRadius:3,overflow:'hidden'}}><div style={{height:'100%',width:(total>0?e[1]/total*100:0)+'%',background:'#60A5FA',borderRadius:3,transition:'width .6s'}}/></div>
-                  <span style={{font:"700 12px/1 'JetBrains Mono',monospace",color:'var(--text)',flexShrink:0}}>{e[1]}</span>
-                </div>
-              );})
+                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,.07)', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', width: (total > 0 ? e[1] / total * 100 : 0) + '%', background: '#60A5FA', borderRadius: 3, transition: 'width .6s' }} /></div>
+                  <span style={{ font: "700 12px/1 'JetBrains Mono',monospace", color: 'var(--text)', flexShrink: 0 }}>{e[1]}</span>
+                </div>);
+              })
               }
-              {!Object.keys(buMap).length&&<div style={{font:'500 11px Sora,sans-serif',color:'var(--muted)',textAlign:'center',padding:'8px 0'}}>No tickets yet</div>}
+              {!Object.keys(buMap).length && <div style={{ font: '500 11px Sora,sans-serif', color: 'var(--muted)', textAlign: 'center', padding: '8px 0' }}>No tickets yet</div>}
             </div>
           </div>
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:12,padding:'14px'}}>
-            <div style={{font:'700 10px Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:10}}>RESOLUTION RATE</div>
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-              <div style={{flex:1,height:10,background:'rgba(255,255,255,.07)',borderRadius:5,overflow:'hidden'}}><div style={{height:'100%',width:rate+'%',background:rc(rate),borderRadius:5,transition:'width .6s'}}/></div>
-              <span style={{font:"800 20px/1 'JetBrains Mono',monospace",color:rc(rate),minWidth:44,textAlign:'right'}}>{rate}%</span>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px' }}>
+            <div style={{ font: '700 10px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>RESOLUTION RATE</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,.07)', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', width: rate + '%', background: rc(rate), borderRadius: 5, transition: 'width .6s' }} /></div>
+              <span style={{ font: "800 20px/1 'JetBrains Mono',monospace", color: rc(rate), minWidth: 44, textAlign: 'right' }}>{rate}%</span>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
-              {[{l:'Done',v:res,c:'#4ADE80'},{l:'Active',v:prg,c:'#FCD34D'},{l:'Open',v:unr,c:'#F87171'}].map(function(k){return(
-                <div key={k.l} style={{textAlign:'center',background:'rgba(255,255,255,.04)',borderRadius:8,padding:'8px 4px'}}>
-                  <div style={{font:"700 16px/1 'JetBrains Mono',monospace",color:k.c,marginBottom:4}}>{k.v}</div>
-                  <div style={{font:'600 9px Sora,sans-serif',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>{k.l}</div>
-                </div>
-              );})
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+              {[{ l: 'Done', v: res, c: '#4ADE80' }, { l: 'Active', v: prg, c: '#FCD34D' }, { l: 'Open', v: unr, c: '#F87171' }].map(function (k) {return (
+                  <div key={k.l} style={{ textAlign: 'center', background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '8px 4px' }}>
+                  <div style={{ font: "700 16px/1 'JetBrains Mono',monospace", color: k.c, marginBottom: 4 }}>{k.v}</div>
+                  <div style={{ font: '600 9px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{k.l}</div>
+                </div>);
+              })
               }
             </div>
           </div>
-          <div style={{background:'rgba(255,199,44,.06)',border:'1px solid rgba(255,199,44,.2)',borderRadius:12,padding:'12px 14px'}}>
-            <div style={{font:'700 9px Sora,sans-serif',color:'var(--ek-gold)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:6}}>📅 REPORT DATE</div>
-            <div style={{font:'700 13px/1.4 Sora,sans-serif',color:'#fff'}}>{dateLabel}</div>
-            <div style={{font:'500 10px Sora,sans-serif',color:'var(--muted)',marginTop:4}}>Live · WAT</div>
+          <div style={{ background: 'rgba(255,199,44,.06)', border: '1px solid rgba(255,199,44,.2)', borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--ek-gold)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>📅 REPORT DATE</div>
+            <div style={{ font: '700 13px/1.4 Sora,sans-serif', color: '#fff' }}>{dateLabel}</div>
+            <div style={{ font: '500 10px Sora,sans-serif', color: 'var(--muted)', marginTop: 4 }}>Live · WAT</div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function DailyReport({ tickets, onUpdate, onSettings }) {
@@ -2097,7 +2165,14 @@ function DailyReport({ tickets, onUpdate, onSettings }) {
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22C55E', boxShadow: '0 0 0 4px rgba(34,197,94,.2)', display: 'inline-block' }} />
             <div style={{ flex: 1 }}>
               <div style={{ font: '700 12px/1 Sora,sans-serif', marginBottom: 3, color: "rgb(16, 117, 56)" }}>June 2026 — Active Month · Live · WAT</div>
-              <div style={{ font: '500 10px/1 Sora,sans-serif', color: 'var(--muted)' }}>Week 1: 1–7 June · New tickets appear automatically via Cloud Sync</div>
+              <div style={{ font: '500 10px/1 Sora,sans-serif', color: 'var(--muted)' }}>{(function(){
+                var d = new Date(new Date().toLocaleString('en-US',{timeZone:'Africa/Lagos'}));
+                var wk = Math.ceil(d.getDate()/7);
+                var start = (wk-1)*7+1;
+                var end = Math.min(wk*7, new Date(d.getFullYear(),d.getMonth()+1,0).getDate());
+                var mo = d.toLocaleDateString('en-GB',{month:'long'});
+                return 'Week '+wk+': '+start+'\u2013'+end+' '+mo;
+              }())} · New tickets appear automatically via Cloud Sync</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontFamily: 'JetBrains Mono,monospace', fontWeight: 900, fontSize: 22, color: '#60A5FA' }}>{juneTix.length}</div>
@@ -2168,49 +2243,49 @@ function MiniCal({ from, to, onSet, onClose }) {
   var daysInMo = new Date(viewYr, viewMo + 1, 0).getDate();
   var firstDow = new Date(viewYr, viewMo, 1).getDay();
   var monthLabel = new Date(viewYr, viewMo, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  function ds(d) { return viewYr + '-' + String(viewMo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
-  function prevMo() { if (viewMo === 0) { setViewMo(11); setViewYr(function(y){return y-1;}); } else { setViewMo(function(m){return m-1;}); } }
-  function nextMo() { if (viewMo === 11) { setViewMo(0); setViewYr(function(y){return y+1;}); } else { setViewMo(function(m){return m+1;}); } }
+  function ds(d) {return viewYr + '-' + String(viewMo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');}
+  function prevMo() {if (viewMo === 0) {setViewMo(11);setViewYr(function (y) {return y - 1;});} else {setViewMo(function (m) {return m - 1;});}}
+  function nextMo() {if (viewMo === 11) {setViewMo(0);setViewYr(function (y) {return y + 1;});} else {setViewMo(function (m) {return m + 1;});}}
   function pickDay(d) {
     var s = ds(d);
-    if (picking === 'from') { onSet(s, to && s <= to ? to : ''); setPicking('to'); }
-    else { if (from && s < from) { onSet(s, from); } else { onSet(from || s, s); } onClose(); }
+    if (picking === 'from') {onSet(s, to && s <= to ? to : '');setPicking('to');} else
+    {if (from && s < from) {onSet(s, from);} else {onSet(from || s, s);}onClose();}
   }
-  React.useEffect(function() {
-    function handler(e) { if (!e.target.closest || !e.target.closest('.cal-pop')) onClose(); }
-    var tid = setTimeout(function() { document.addEventListener('mousedown', handler); }, 100);
-    return function() { clearTimeout(tid); document.removeEventListener('mousedown', handler); };
+  React.useEffect(function () {
+    function handler(e) {if (!e.target.closest || !e.target.closest('.cal-pop')) onClose();}
+    var tid = setTimeout(function () {document.addEventListener('mousedown', handler);}, 100);
+    return function () {clearTimeout(tid);document.removeEventListener('mousedown', handler);};
   }, []);
   var cells = [];
   for (var bi = 0; bi < firstDow; bi++) cells.push(null);
   for (var di = 1; di <= daysInMo; di++) cells.push(di);
   while (cells.length % 7 !== 0) cells.push(null);
   return (
-    <div className="cal-pop" onClick={function(e){e.stopPropagation();}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-        <button onClick={prevMo} style={{background:'none',border:'none',color:'var(--text)',cursor:'pointer',fontSize:16,padding:'2px 6px',borderRadius:5}}>‹</button>
-        <span style={{font:'700 12px Sora,sans-serif',color:'var(--text)'}}>{monthLabel}</span>
-        <button onClick={nextMo} style={{background:'none',border:'none',color:'var(--text)',cursor:'pointer',fontSize:16,padding:'2px 6px',borderRadius:5}}>›</button>
+    <div className="cal-pop" onClick={function (e) {e.stopPropagation();}}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <button onClick={prevMo} style={{ background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 16, padding: '2px 6px', borderRadius: 5 }}>‹</button>
+        <span style={{ font: '700 12px Sora,sans-serif', color: 'var(--text)' }}>{monthLabel}</span>
+        <button onClick={nextMo} style={{ background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 16, padding: '2px 6px', borderRadius: 5 }}>›</button>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4}}>
-        {['S','M','T','W','T','F','S'].map(function(h,hi){return <div key={hi} style={{textAlign:'center',font:'700 9px Sora,sans-serif',color:'var(--muted)',padding:'2px 0'}}>{h}</div>;})}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (h, hi) {return <div key={hi} style={{ textAlign: 'center', font: '700 9px Sora,sans-serif', color: 'var(--muted)', padding: '2px 0' }}>{h}</div>;})}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
-        {cells.map(function(d,ci){
-          if (!d) return <div key={'e'+ci} style={{height:30}} />;
-          var s=ds(d);
-          return <div key={d} className={'cal-day'+(s===todayStr?' cal-today':'')+(s===from||s===to?' cal-sel':'')+(from&&to&&s>from&&s<to?' cal-range':'')} onClick={function(){pickDay(d);}}>{d}</div>;
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {cells.map(function (d, ci) {
+          if (!d) return <div key={'e' + ci} style={{ height: 30 }} />;
+          var s = ds(d);
+          return <div key={d} className={'cal-day' + (s === todayStr ? ' cal-today' : '') + (s === from || s === to ? ' cal-sel' : '') + (from && to && s > from && s < to ? ' cal-range' : '')} onClick={function () {pickDay(d);}}>{d}</div>;
         })}
       </div>
-      <div style={{marginTop:10,borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:8}}>
-        <div style={{font:'600 10px Sora,sans-serif',color:picking==='from'?'#FCD34D':'#93C5FD',marginBottom:6}}>{picking==='from'?'► Set start date':'► Set end date'}</div>
-        <div style={{display:'flex',gap:6,alignItems:'center'}}>
-          <span style={{flex:1,font:'700 11px JetBrains Mono,monospace',color:'var(--info)'}}>{from||'—'}{(from||to)?' → ':''}{to||''}</span>
-          <button onClick={function(){onSet('','');onClose();}} style={{padding:'4px 10px',background:'rgba(239,68,68,.15)',color:'#F87171',border:'1px solid rgba(239,68,68,.3)',borderRadius:6,font:'700 10px Sora,sans-serif',cursor:'pointer'}}>Clear</button>
+      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 8 }}>
+        <div style={{ font: '600 10px Sora,sans-serif', color: picking === 'from' ? '#FCD34D' : '#93C5FD', marginBottom: 6 }}>{picking === 'from' ? '► Set start date' : '► Set end date'}</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ flex: 1, font: '700 11px JetBrains Mono,monospace', color: 'var(--info)' }}>{from || '—'}{from || to ? ' → ' : ''}{to || ''}</span>
+          <button onClick={function () {onSet('', '');onClose();}} style={{ padding: '4px 10px', background: 'rgba(239,68,68,.15)', color: '#F87171', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, font: '700 10px Sora,sans-serif', cursor: 'pointer' }}>Clear</button>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelete, showToast, onSettings, readOnly }) {
@@ -2475,7 +2550,7 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
       t.phone || '',
       t.addr || t.address || '',
       t.meter || '',
-      '', // Email Address
+      t.email || '', // Email Address
       t.bu || '',
       (t.category || '').toUpperCase(),
       t.issue || '',
@@ -2631,13 +2706,13 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
           var todayList = tickets.filter(inDuty);
           var todayResolved = todayList.filter(function (t) {return t.status === 'resolved';}).length;
           var todayRate = todayList.length ? Math.round(todayResolved / todayList.length * 100) : 0;
-          var reportsSent = (hh >= 9 ? 1 : 0) + (hh >= 12 ? 1 : 0) + (hh >= 17 ? 1 : 0);
+          var reportsSent = (hh >= 9 ? 1 : 0) + (hh >= 12 ? 1 : 0) + (hh >= 16 ? 1 : 0) + (hh >= 17 ? 1 : 0);
           var unassigned = todayList.filter(function (t) {return !(t.responsible || t.resp);}).length;
           var isCOB = hh >= 17;
           var SCORE = [
           { l: 'Same-day Resolution', v: todayList.length ? todayRate + '%' : '—', sub: 'target ≥ 80%', ok: todayRate >= 80 && todayList.length > 0, warn: todayList.length > 0 && todayRate < 80, c: '#22C55E' },
           { l: 'Tickets Logged Today', v: todayList.length, sub: 'received today (WAT)', ok: todayList.length > 0, warn: false, c: '#60A5FA' },
-          { l: 'Daily Reports Sent', v: reportsSent + ' / 3', sub: '9 AM · 12 PM · 4 PM', ok: reportsSent === 3, warn: isCOB && reportsSent < 3, c: '#FBBF24' },
+          { l: 'Daily Reports Sent', v: reportsSent + ' / 4', sub: '9 AM · 12 PM · 4 PM · 5 PM COB', ok: reportsSent === 4, warn: isCOB && reportsSent < 4, c: '#FBBF24' },
           { l: 'Unassigned at COB', v: unassigned, sub: isCOB ? 'target = 0' : 'check at 4 PM', ok: unassigned === 0, warn: isCOB && unassigned > 0, c: '#A78BFA' }];
 
           return (
@@ -2750,7 +2825,7 @@ function AllComplaints({ tickets, onUpdate, onBulkUpdate, onBatchUpdate, onDelet
                   const isExp = expanded === t.id;
                   return (
                     <React.Fragment key={t.id}>
-                      <tr className={(function(){var uw=!t.note&&t.status==='unresolved'&&!t.resp&&!t.updatedAt;return t.status==='resolved'?'row-resolved ':t.status==='progress'?'row-progress ':uw?'row-unworked ':'row-worked ';}())} style={{ cursor: 'pointer', background: isSel ? 'rgba(99,102,241,.12)' : '', outline: isSel ? '1px solid rgba(99,102,241,.3)' : '', outlineOffset: '-1px' }}
+                      <tr className={function () {var uw = !t.note && t.status === 'unresolved' && !t.resp && !t.updatedAt;return t.status === 'resolved' ? 'row-resolved ' : t.status === 'progress' ? 'row-progress ' : uw ? 'row-unworked ' : 'row-worked ';}()} style={{ cursor: 'pointer', background: isSel ? 'rgba(99,102,241,.12)' : '', outline: isSel ? '1px solid rgba(99,102,241,.3)' : '', outlineOffset: '-1px' }}
                       onClick={function () {setExpanded(isExp ? null : t.id);}}>
                         <td style={{ padding: '8px 6px' }} onClick={function (e) {toggleOne(e, t.id, paged.map(function (x) {return x.id;}));}}>
                           <input type="checkbox" checked={isSel} onChange={function () {}} style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--ek-gold)', pointerEvents: 'none' }} />
@@ -4025,6 +4100,39 @@ function pctBarHtml(pct) {
   const fill = pct >= 80 ? '#22C55E' : pct >= 60 ? '#F59E0B' : '#C2410C';
   return `<div style="background:#1E293B;border-radius:4px;height:8px;width:100%;margin-top:4px"><div style="background:${fill};width:${pct}%;height:8px;border-radius:4px"></div></div>`;
 }
+// Copy report HTML to the clipboard as RICH html (text/html) so Outlook/Gmail
+// paste a rendered table — not the raw <td> markup. Falls back to a hidden
+// contenteditable + execCommand('copy') (also rich), then to plain text.
+function copyRichHtml(html, showToast) {
+  function ok() {(showToast || function () {})('Email copied ✓ — paste into Outlook');}
+  function fail() {(showToast || function () {})('Copy failed — try again', 'error');}
+  // 1) Modern async Clipboard API with a text/html blob
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      var item = new window.ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([html], { type: 'text/plain' }) });
+      navigator.clipboard.write([item]).then(ok).catch(function () {legacyCopyRich(html) ? ok() : fail();});
+      return;
+    }
+  } catch (e) {}
+  // 2) Legacy: select a rendered contenteditable node and execCommand('copy')
+  legacyCopyRich(html) ? ok() : fail();
+}
+function legacyCopyRich(html) {
+  try {
+    var holder = document.createElement('div');
+    holder.contentEditable = 'true';
+    holder.innerHTML = html;
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;opacity:0;';
+    document.body.appendChild(holder);
+    var range = document.createRange();range.selectNodeContents(holder);
+    var sel = window.getSelection();sel.removeAllRanges();sel.addRange(range);
+    var done = document.execCommand('copy');
+    sel.removeAllRanges();document.body.removeChild(holder);
+    return done;
+  } catch (e) {return false;}
+}
 function buildEmailHtml(title, subtitle, bodyHtml) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F1F5F9;font-family:Sora,Arial,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:24px 0">
@@ -4477,7 +4585,7 @@ ${[{ l: 'Total', v: total, c: '#6366F1' }, { l: 'Resolved', v: res, c: '#22C55E'
 <thead><tr style="background:#F1F5F9"><th style="padding:8px 12px;text-align:left;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Party</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Total</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Resolved</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Unresolved</th><th style="padding:8px 12px;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Rate</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Rating</th></tr></thead>
 <tbody>${partyHtml}</tbody></table>`;
     const html = buildEmailHtml('Executive Summary Report', 'EK CX Hub · ' + new Date().toLocaleDateString('en-GB'), body);
-    navigator.clipboard.writeText(html).then(function () {showToast('Email HTML copied ✓');}).catch(function () {showToast('Copy failed', 'error');});
+    copyRichHtml(html, showToast);
   }
 
   const tabStyle = function (id) {return { padding: '8px 18px', border: 'none', borderRadius: 20, cursor: 'pointer', font: '600 12px Sora,sans-serif', transition: 'all .15s', background: tab === id ? 'var(--ek-gold)' : ' transparent', color: tab === id ? '#0A1628' : 'var(--muted)' };};
@@ -4675,7 +4783,7 @@ ${[{ l: 'Total', v: wTix.length, c: '#6366F1' }, { l: 'Resolved', v: res, c: '#2
 <thead><tr style="background:#F1F5F9"><th style="padding:8px 12px;text-align:left;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Category</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Count</th></tr></thead>
 <tbody>${catRows}</tbody></table>`;
     const html = buildEmailHtml('Weekly Report', 'Week of ' + selWeek + ' – ' + sun, body);
-    navigator.clipboard.writeText(html).then(function () {showToast('Email HTML copied ✓');}).catch(function () {showToast('Copy failed', 'error');});
+    copyRichHtml(html, showToast);
   }
 
   const weekLabel = function (mon) {const s = rptSunday(mon);return mon + ' → ' + s;};
@@ -4775,7 +4883,7 @@ ${[{ l: 'Total', v: mTix.length, c: '#6366F1' }, { l: 'Resolved', v: res, c: '#2
 <thead><tr style="background:#F1F5F9"><th style="padding:8px 12px;text-align:left;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Party</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Total</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Resolved</th><th style="padding:8px 12px;text-align:center;font:700 10px Sora,sans-serif;color:#64748B;text-transform:uppercase">Rating</th></tr></thead>
 <tbody>${partyRowsHtml}</tbody></table>`;
     const html = buildEmailHtml('Monthly Report', new Date(selMonth + '-15').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), body);
-    navigator.clipboard.writeText(html).then(function () {showToast('Email HTML copied ✓');}).catch(function () {showToast('Copy failed', 'error');});
+    copyRichHtml(html, showToast);
   }
 
   return (
@@ -5806,8 +5914,21 @@ function WeekScheduleGrid({ activeMonth }) {
     return d;
   }, [activeMonth]);
   var [weekOffset, setWeekOffset] = useState(0);
-  // Reset to week 0 whenever activeMonth changes
-  useEffect(function () {setWeekOffset(0);}, [activeMonth]);
+  // Compute which week offset contains TODAY (relative to baseMonday)
+  function currentWeekOffset() {
+    var t = new Date(watNow); t.setHours(0, 0, 0, 0);
+    var dow = t.getDay() || 7;
+    var todayMonday = new Date(t); todayMonday.setDate(t.getDate() - dow + 1);
+    var diffDays = Math.round((todayMonday - baseMonday) / 86400000);
+    var off = Math.round(diffDays / 7);
+    return off >= 0 && off <= 5 ? off : 0;
+  }
+  // Open on the CURRENT week (smart) — but only when the activeMonth is the month
+  // that today falls in; for any other month, open on its 1st week.
+  useEffect(function () {
+    var ymNow = watNow.getFullYear() + '-' + String(watNow.getMonth() + 1).padStart(2, '0');
+    setWeekOffset(!activeMonth || activeMonth === ymNow ? currentWeekOffset() : 0);
+  }, [activeMonth]);
 
   // Derive the Monday of the selected week
   var monday = new Date(baseMonday);
@@ -5832,7 +5953,11 @@ function WeekScheduleGrid({ activeMonth }) {
     return 'off';
   }
 
-  // Label: "WEEK OF 1 JUN" using Monday's date
+  // Is the displayed week the one containing today?
+  var isCurrentWeek = weekOffset === currentWeekOffset();
+  var ymNowLbl = watNow.getFullYear() + '-' + String(watNow.getMonth() + 1).padStart(2, '0');
+  var todayInThisMonth = !activeMonth || activeMonth === ymNowLbl;
+  // Label: "WEEK OF 8 JUN" using Monday's date
   var weekLabel = 'WEEK OF ' + monday.getDate() + ' ' + monday.toLocaleString('en-GB', { month: 'short' }).toUpperCase();
 
   return (
@@ -5844,7 +5969,7 @@ function WeekScheduleGrid({ activeMonth }) {
         </h3>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-sm" onClick={function () {setWeekOffset(function (o) {return o - 1;});}} style={{ padding: '4px 10px', fontSize: 11 }}>← Prev</button>
-          <button className="btn btn-sm" onClick={function () {setWeekOffset(0);}} style={{ padding: '4px 10px', fontSize: 11, background: weekOffset === 0 ? 'var(--ek-gold)' : '', color: weekOffset === 0 ? '#000' : '' }}>1st Week</button>
+          <button className="btn btn-sm" onClick={function () {setWeekOffset(todayInThisMonth ? currentWeekOffset() : 0);}} style={{ padding: '4px 10px', fontSize: 11, background: isCurrentWeek ? 'var(--ek-gold)' : '', color: isCurrentWeek ? '#000' : '' }}>{todayInThisMonth ? 'This Week' : '1st Week'}</button>
           <button className="btn btn-sm" onClick={function () {setWeekOffset(function (o) {return o + 1;});}} style={{ padding: '4px 10px', fontSize: 11 }}>Next →</button>
         </div>
       </div>
@@ -5900,12 +6025,15 @@ function WeekScheduleGrid({ activeMonth }) {
 }
 
 // ── CLOUD SYNC — SharePoint via Power Automate ───────────────────
-function CloudSync({ tickets, setTickets, showToast }) {
+function CloudSync({ tickets, setTickets, showToast, signedInName }) {
   const PA_PULL_KEY = 'ek_pa_pull_url';
   const PA_PUSH_KEY = 'ek_pa_push_url';
+  const PA_REPORT_KEY = 'ek_pa_report_url';
 
   const [pullUrl, setPullUrl] = useState(() => localStorage.getItem(PA_PULL_KEY) || '');
   const [pushUrl, setPushUrl] = useState(() => localStorage.getItem(PA_PUSH_KEY) || '');
+  const [reportUrl, setReportUrl] = useState(() => localStorage.getItem(PA_REPORT_KEY) || '');
+  const [reportDraft, setReportDraft] = useState('');
   const recentPushes = React.useRef({});
   const [pullDraft, setPullDraft] = useState('');
   const [pushDraft, setPushDraft] = useState('');
@@ -5930,10 +6058,16 @@ function CloudSync({ tickets, setTickets, showToast }) {
     localStorage.setItem(PA_PUSH_KEY, u);setPushUrl(u);setPushDraft('');
     showToast('Push URL saved ✅');addLog('Push URL saved', true);
   }
+  function saveReportUrl() {
+    const u = (reportDraft || '').trim();
+    if (!u) {showToast('Paste your Report Email Flow URL first', 'error');return;}
+    localStorage.setItem(PA_REPORT_KEY, u);setReportUrl(u);setReportDraft('');
+    showToast('Report URL saved ✅');addLog('Report Email URL saved', true);
+  }
   function clearUrls() {
     if (!window.confirm('Clear both Power Automate URLs from this device?')) return;
-    localStorage.removeItem(PA_PULL_KEY);localStorage.removeItem(PA_PUSH_KEY);
-    setPullUrl('');setPushUrl('');setConnected(false);
+    localStorage.removeItem(PA_PULL_KEY);localStorage.removeItem(PA_PUSH_KEY);localStorage.removeItem(PA_REPORT_KEY);
+    setPullUrl('');setPushUrl('');setReportUrl('');setConnected(false);
     showToast('URLs cleared');addLog('PA URLs cleared', false);
   }
 
@@ -5959,14 +6093,16 @@ function CloudSync({ tickets, setTickets, showToast }) {
             await new Promise(function (r) {setTimeout(r, wait);});
           }
           const ctrl = new AbortController();
-          const tid = setTimeout(function () {ctrl.abort();}, 30000);
-          res = await fetch(pullUrl, { method: 'POST', signal: ctrl.signal });
+          const tid = setTimeout(function () {ctrl.abort();}, 120000); // 120s — full-month pull with 250+ tickets
+          var triggeredBy = signedInName || localStorage.getItem('ek_v2_name') || 'Manager';
+          var pullWithWho = pullUrl + (pullUrl.indexOf('?') >= 0 ? '&' : '?') + 'triggeredBy=' + encodeURIComponent(triggeredBy) + '&source=' + encodeURIComponent('Managers Hub');
+          res = await fetch(pullWithWho, { method: 'POST', signal: ctrl.signal });
           clearTimeout(tid);
           if (res.ok || res.status === 404) break;
-          lastErr = new Error('HTTP ' + res.status + (res.status === 502 ? ' (gateway timeout)' : res.status === 503 ? ' (service unavailable)' : ''));
+          lastErr = new Error('HTTP ' + res.status + (res.status === 502 ? ' (gateway — PA cold start, retrying)' : res.status === 503 ? ' (service unavailable)' : ''));
           if (res.status < 500) break;
         } catch (err) {
-          lastErr = err.name === 'AbortError' ? new Error('Request timed out after 30 s') : err;
+          lastErr = err.name === 'AbortError' ? new Error('Request timed out after 120 s — PA may still be processing') : err;
           if (attempt === 3) throw lastErr;
         }
       }
@@ -5985,7 +6121,7 @@ function CloudSync({ tickets, setTickets, showToast }) {
               category: t.Category || (t.category && t.subcategory ? t.category + ' — ' + t.subcategory : t.category || ''),
               issue: t.description || t.issue || t.title || '', resp: t['Responsible_x0020_Party'] || t.assignee || '',
               status: STATUS_MAP_N[(t.APPStatus || t.status || '').toLowerCase()] || 'unresolved',
-              note: t.ActionTaken || (function () {var iss = t.note || t.title || '';var nt = t.resolutionNote || '';return nt && iss && nt.trim().toLowerCase() === iss.trim().toLowerCase() ? '' : nt;})(), day: day.dayNum || new Date().getDate(),
+              note: t.ActionTaken || function () {var iss = t.note || t.title || '';var nt = t.resolutionNote || '';return nt && iss && nt.trim().toLowerCase() === iss.trim().toLowerCase() ? '' : nt;}(), day: day.dayNum || new Date().getDate(),
               agent: t.agent || 'manager', created: t.created || t.received || t.receivedAt || t.createdAt || t.date || t.Date || t.dateCreated || t.receivedDate || t.Created || t.timestamp || ''
             });
           });
@@ -6018,8 +6154,8 @@ function CloudSync({ tickets, setTickets, showToast }) {
             if (Date.now() - _pushTime < 90000) {updated++;return;}
             var spResp = t['Responsible_x0020_Party'] || t.resp;
             var spNote = t.ActionTaken || t.note;
-            var spCat  = t.Category || t.category;
-            var spStat = t.APPStatus ? (STATUS_MAP_N[(t.APPStatus || '').toLowerCase()] || ex.status) : (t.status || ex.status);
+            var spCat = t.Category || t.category;
+            var spStat = t.APPStatus ? STATUS_MAP_N[(t.APPStatus || '').toLowerCase()] || ex.status : t.status || ex.status;
             merged[idx] = Object.assign({}, ex, {
               status: spStat || ex.status,
               note: spNote !== undefined ? spNote : ex.note,
@@ -6196,7 +6332,7 @@ function CloudSync({ tickets, setTickets, showToast }) {
                     {saving ? '⟳ Working…' : '⬆ Push to SharePoint'}
                   </button>
                 </div>
-                <div style={{ padding: '0 16px 14px', font: '500 11px Sora,sans-serif', color: 'var(--sub)' }}>
+                <div style={{ padding: '0 16px 14px', font: '500 11px Sora,sans-serif', color: "rgb(77, 53, 13)" }}>
                   🔒 Both actions use Power Automate HTTP trigger flows — data never leaves Microsoft 365.
                 </div>
               </div>
@@ -6237,7 +6373,7 @@ function CloudSync({ tickets, setTickets, showToast }) {
             </div>
             {open.push &&
             <div style={{ padding: 16 }}>
-                {pushUrl && <div style={{ font: '600 11px Sora,sans-serif', color: 'var(--infob)', marginBottom: 10 }}>✓ Push URL saved — update below if needed.</div>}
+                {pushUrl && <div style={{ font: '600 11px Sora,sans-serif', marginBottom: 10, color: "rgb(109, 75, 22)" }}>✓ Push URL saved — update below if needed.</div>}
                 {!pushUrl && <div style={{ font: '600 12px/1.6 Sora,sans-serif', color: 'var(--muted)', marginBottom: 12 }}>Create a second <b style={{ color: 'var(--text)' }}>HTTP request trigger</b> flow that accepts ticket data (POST JSON) and writes back to SharePoint. Paste the URL below.</div>}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
                   <input className="inp" type="text" value={pushDraft} onChange={function (e) {setPushDraft(e.target.value);}} placeholder={pushUrl ? '•••••••• (saved — paste to replace)' : 'https://prod-xx.westeurope.logic.azure.com/…'} />
@@ -6247,7 +6383,27 @@ function CloudSync({ tickets, setTickets, showToast }) {
             }
           </div>
 
-          {(pullUrl || pushUrl) &&
+          {/* REPORT EMAIL URL */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div className="card-head" style={{ cursor: 'pointer' }} onClick={function () {tog('report');}}>
+              <h3>📤 Report Email Flow</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {reportUrl && <span style={{ font: '600 10px Sora,sans-serif', color: 'var(--okb)' }}>✓ URL saved</span>}
+                <ChevBtn k="report" />
+              </div>
+            </div>
+            {open.report &&
+            <div style={{ padding: 16 }}>
+              {reportUrl && <div style={{ font: '600 11px Sora,sans-serif', marginBottom: 10, color: 'var(--ok)' }}>✓ Report URL saved — update below if needed.</div>}
+              {!reportUrl && <div style={{ font: '600 12px/1.6 Sora,sans-serif', color: 'var(--muted)', marginBottom: 12 }}>Create a Power Automate flow with an <b style={{ color: 'var(--text)' }}>HTTP request trigger</b>. It receives a JSON payload with date, slot, counts and RP breakdown — configure the flow to send an email from <b style={{ color: 'var(--text)' }}>customercare@ekedp.com</b> to GM &amp; leadership.</div>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                <input className="inp" type="text" value={reportDraft} onChange={function (e) {setReportDraft(e.target.value);}} placeholder={reportUrl ? '•••••••• (saved — paste to replace)' : 'https://prod-xx.westeurope.logic.azure.com/...'} />
+                <button className="btn btn-sm" style={{ padding: '8px 12px', background: '#4F46E5', color: '#fff', border: 'none', borderRadius: 7, font: '800 11px Sora,sans-serif', cursor: 'pointer' }} onClick={saveReportUrl}>✓ {reportUrl ? 'Update' : 'Save'}</button>
+              </div>
+            </div>}
+          </div>
+
+          {(pullUrl || pushUrl || reportUrl) &&
           <button onClick={clearUrls} style={{ padding: '9px 16px', background: 'rgba(239,68,68,.12)', color: '#C2410C', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8, font: '700 12px Sora,sans-serif', cursor: 'pointer', alignSelf: 'flex-start' }}>
               ✕ Clear all URLs
             </button>
@@ -6265,13 +6421,13 @@ function CloudSync({ tickets, setTickets, showToast }) {
           </div>
           {open.log &&
           <div>
-              {!log.length && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', font: '500 12px Sora,sans-serif' }}>No sync activity yet.<br /><span style={{ fontSize: 11 }}>Pull or Push to get started.</span></div>}
+              {!log.length && <div style={{ padding: '24px', textAlign: 'center', font: '500 12px Sora,sans-serif', color: "rgb(115, 80, 20)" }}>No sync activity yet.<br /><span style={{ fontSize: 11, color: "rgb(97, 65, 12)" }}>Pull or Push to get started.</span></div>}
               <div style={{ maxHeight: 440, overflowY: 'auto' }}>
                 {log.map(function (l, i) {return (
                   <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--bsoft)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <span style={{ color: l.ok === true ? 'var(--okb)' : l.ok === false ? 'var(--bdb)' : 'var(--wnb)', marginTop: 1, flexShrink: 0 }}>{l.ok === true ? '✓' : l.ok === false ? '✕' : '↻'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ font: '600 11px/1.3 Sora,sans-serif', color: 'var(--text)' }}>{l.msg}</div>
+                      <div style={{ font: '600 11px/1.3 Sora,sans-serif', color: "rgb(146, 17, 17)" }}>{l.msg}</div>
                       <div style={{ font: '500 10px/1 JetBrains Mono,monospace', color: 'var(--sub)', marginTop: 3 }}>{l.time} WAT</div>
                     </div>
                   </div>);
@@ -6466,28 +6622,28 @@ function App() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
         // Silent — background pull failures don't interrupt the user
       } finally {running = false;}} // Initial pull 2 seconds after app loads
     var initTimer = setTimeout(bgPull, 2000); // Then every 30 seconds continuously
     var interval = setInterval(bgPull, 30000);return function () {clearTimeout(initTimer);clearInterval(interval);};}, []); // eslint-disable-line
   // ──────────────────────────────────────────────────────────────────────────
-  function showToast(msg, type) {if (toastTimer.current) clearTimeout(toastTimer.current);setToast({ msg, type: 'success', ...(type === 'error' ? { type: 'error' } : {}) });toastTimer.current = setTimeout(() => setToast(null), 3000);}function onShift(agentId, shift) {setShifts(function (s) {const n = { ...s, [agentId]: shift };saveShifts(n);return n;});}function onAdd(newTix) {
-    setTickets(function (prev) {
-      const r = dedupTickets(prev, newTix);
-      const merged = [...r.merged, ...r.kept];
-      persistTickets(merged);
-      if (r.updated > 0) showToast('Added ' + r.kept.length + ' · ' + r.updated + ' status update' + (r.updated > 1 ? 's' : '') + ' · ' + r.dropped + ' duplicate' + (r.dropped > 1 ? 's' : '') + ' skipped', 'warn');else
-      if (r.dropped > 0) showToast('Added ' + r.kept.length + ' · ' + r.dropped + ' duplicate' + (r.dropped > 1 ? 's' : '') + ' skipped', 'warn');
-      return merged;
-    });
-  }
-
-  function onUpdate(updated, opts) {
-    setTickets(function (prev) {
-      const next = prev.map(function (t) {return t.id === updated.id ? updated : t;});
-      persistTickets(next);
-      return next;
-    });
+  function showToast(msg, type) {if (toastTimer.current) clearTimeout(toastTimer.current);setToast({ msg, type: 'success', ...(type === 'error' ? { type: 'error' } : {}) });toastTimer.current = setTimeout(() => setToast(null), 3000);}function onShift(agentId, shift) {setShifts(function (s) {const n = { ...s, [agentId]: shift };saveShifts(n);return n;});}function onAdd(newTix) {setTickets(function (prev) {const r = dedupTickets(prev, newTix);const merged = [...r.merged, ...r.kept];persistTickets(merged);if (r.updated > 0) showToast('Added ' + r.kept.length + ' · ' + r.updated + ' status update' + (r.updated > 1 ? 's' : '') + ' · ' + r.dropped + ' duplicate' + (r.dropped > 1 ? 's' : '') + ' skipped', 'warn');else if (r.dropped > 0) showToast('Added ' + r.kept.length + ' · ' + r.dropped + ' duplicate' + (r.dropped > 1 ? 's' : '') + ' skipped', 'warn');return merged;});}function onUpdate(updated, opts) {setTickets(function (prev) {const next = prev.map(function (t) {return t.id === updated.id ? updated : t;});
+        persistTickets(next);
+        return next;
+      });
     showToast('✓ Ticket #' + updated.num + ' updated');
 
     // Only push to SharePoint when explicitly triggered from the popout Save button
@@ -6558,13 +6714,13 @@ function App() {
   const W = collapsed ? 64 : 220;
   const screens = {
     dashboard: <AnalyticsDash tickets={viewTickets} shifts={shifts} onNav={setScreen} signedInName={signedInName} onSettings={() => setShowSettings(true)} activeMonth={activeMonth} />,
-    todayreport: <ManagerDailyReport tickets={viewTickets} showToast={showToast} />,
+    todayreport: <ManagerDailyReport tickets={viewTickets} showToast={showToast} shifts={shifts} />,
     daily: <DailyReport tickets={tickets} onUpdate={onUpdate} onSettings={() => setShowSettings(true)} />,
     all: <AllComplaints tickets={viewTickets} onUpdate={onUpdate} onBulkUpdate={function (ids, patch) {setTickets(function (prev) {const next = prev.map(function (t) {return ids.includes(t.id) ? Object.assign({}, t, patch) : t;});persistTickets(next);return next;});showToast('Updated ' + ids.length + ' ticket' + (ids.length > 1 ? 's' : '') + ' ✅');}} onBatchUpdate={function (updates) {setTickets(function (prev) {const next = prev.map(function (t) {const u = updates.find(function (x) {return x.id === t.id;});return u ? Object.assign({}, t, u) : t;});persistTickets(next);return next;});showToast('✅ Batch-updated ' + updates.length + ' tickets');}} onDelete={function (ids) {setTickets(function (prev) {const next = prev.filter(function (t) {return !ids.includes(t.id);});persistTickets(next);return next;});showToast('🗑 Deleted ' + ids.length + ' ticket' + (ids.length > 1 ? 's' : '') + ' permanently.');}} showToast={showToast} onSettings={() => setShowSettings(true)} />,
     log: <LogTicket tickets={tickets} onAdd={onAdd} showToast={showToast} onSettings={() => setShowSettings(true)} />,
     slot: <SlotReport tickets={viewTickets} showToast={showToast} />,
     agents: <Agents tickets={viewTickets} shifts={shifts} onShift={onShift} showToast={showToast} activeMonth={activeMonth} />,
-    sync: <CloudSync tickets={tickets} setTickets={setTickets} showToast={showToast} />,
+    sync: <CloudSync tickets={tickets} setTickets={setTickets} showToast={showToast} signedInName={signedInName} />,
     data: <DataPage tickets={tickets} setTickets={setTickets} showToast={showToast} />,
     rpt_verify: <ReportVerify tickets={tickets} onBulkUpdate={function (ids, patch) {setTickets(function (prev) {const next = prev.map(function (t) {return ids.includes(t.id) ? Object.assign({}, t, patch) : t;});persistTickets(next);return next;});}} showToast={showToast} />,
     rpt_anomaly: <ReportAnomaly tickets={tickets} onBulkUpdate={function (ids, patch) {setTickets(function (prev) {const next = prev.map(function (t) {return ids.includes(t.id) ? Object.assign({}, t, patch) : t;});persistTickets(next);return next;});}} showToast={showToast} />,

@@ -480,10 +480,13 @@ const AGENTS = [
 { id: 'loveth', name: 'Loveth Okpara', email: 'loveth.okpara@ekedp.com', color: '#F59E0B', tint: 'rgba(245,158,11,.18)', initials: 'LO', role: 'CX Agent' }];
 
 const BUS = ['ISLAND', 'IJORA', 'MUSHIN', 'AJAH', 'LEKKI', 'APAPA', 'AGBARA', 'AJELE', 'OJO', 'FESTAC', 'ORILE', 'IBEJU-LEKKI'];
-const CATS = ['Band Reclassification', 'Billing', 'Interruption / Voltage / Safety', 'Metering', 'PPM Support', 'PPM Maintenance', 'Onboarding', 'MYCRON', 'AMISA', 'General'];
+const CATS = ['METERING', 'BILLING', 'INTERRUPTION', 'VOLTAGE', 'SAFETY ISSUES', 'DISCONNECTION', 'REFUND', 'BAND RECLASSIFICATION', 'PPM SUPPORT', 'PPM MAINTENANCE', 'ONBOARDING', 'MYCRON', 'AMISA', 'GENERAL'];
 const RESP_LIST = ['Holyland Umude', 'Mojibola Adefuwa', 'Ogheneyoreme Agbroko', 'David Obisesan', 'Olusegun Owokade', 'Clara Olutola', 'Glory Chinyere', 'Festus Moko', 'Nonye Angelina Nnadozie'];
-const RESP_MAP = { 'Band Reclassification': 'Nonye Angelina Nnadozie', 'Billing': 'Mojibola Adefuwa', 'Interruption': 'Ogheneyoreme Agbroko', 'Voltage': 'Ogheneyoreme Agbroko', 'Metering': 'Holyland Umude', 'PPM Support': 'David Obisesan', 'PPM Maintenance': 'Olusegun Owokade', 'Onboarding': 'Clara Olutola', 'MYCRON': 'Glory Chinyere', 'AMISA': 'Festus Moko', 'CX': 'Customer Experience', 'Customer Experience': 'Customer Experience', 'General': 'Customer Experience' };
+const RESP_MAP = { 'Band Reclassification': 'Nonye Angelina Nnadozie', 'Billing': 'Mojibola Adefuwa', 'Interruption': 'Ogheneyoreme Agbroko', 'Voltage': 'Ogheneyoreme Agbroko', 'Safety': 'Ogheneyoreme Agbroko', 'Metering': 'Holyland Umude', 'PPM Support': 'David Obisesan', 'PPM Maintenance': 'Olusegun Owokade', 'Onboarding': 'Clara Olutola', 'MYCRON': 'Glory Chinyere', 'AMISA': 'Festus Moko', 'CX': 'Customer Experience', 'Customer Experience': 'Customer Experience', 'General': 'Customer Experience' };
 function getResp(cat) {var c = (cat || '').toLowerCase();const k = Object.keys(RESP_MAP).find(function (k) {return c.includes(k.toLowerCase());});return k ? RESP_MAP[k] : '';}
+// All category <option> sets must include the ticket's CURRENT value so editing
+// other fields never silently reformats a SharePoint category that isn't in CATS.
+function catOptionsFor(cur) {var list = CATS.slice();var c = (cur || '').trim();if (c && list.indexOf(c) === -1) list = [c].concat(list);return list;}
 const THEMES = [
 { id: 'bright', label: 'Bright ☀️', sw: 'linear-gradient(135deg,#EAF0FF 0%,#C9B8FF 60%,#7FE6FF 120%)', desc: 'Pastel rings — light wallpaper' },
 { id: 'solar', label: 'Solar 🌅', sw: 'linear-gradient(135deg,#2A1A06 0%,#E0830A 70%,#FFB02E 120%)', desc: 'Amber tiles — warm wallpaper' },
@@ -495,7 +498,7 @@ const NAV = [
 { id: 'dashboard', icon: '📊', label: 'Dashboard' },
 { id: 'all', icon: '📂', label: 'All Complaints' },
 { id: 'tickets', icon: '📋', label: 'My Tickets' },
-{ id: 'slot', icon: '📤', label: 'Slot Reports' },
+{ id: 'slot', icon: '📧', label: 'Email Reporting' },
 { id: 'data', icon: '📁', label: 'Export / Import' },
 { id: 'sync', icon: '☁', label: 'Cloud Sync' },
 { id: 'roster', icon: '👥', label: 'Team Roster' },
@@ -836,6 +839,7 @@ function Signin({ onSignIn }) {
           {err && <div style={{ color: 'var(--bdb)', font: '600 11px Sora,sans-serif', marginBottom: 8 }}>{err}</div>}
           <button type="submit" style={{ width: '100%', padding: '12px', background: sel ? sel.color : 'rgba(255,255,255,.08)', color: '#fff', border: 'none', borderRadius: 9, font: '800 13px Sora,sans-serif', cursor: sel ? 'pointer' : 'not-allowed', transition: 'background .2s', opacity: sel ? 1 : .55 }}>{sel ? 'Sign in as ' + sel.name.split(' ')[0] + ' →' : 'Pick your name first'}</button>
         </form>
+        <a href='Daily Email Report.html' style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)', borderRadius: 9, font: '700 11px Sora,sans-serif', color: '#93C5FD', textDecoration: 'none' }}>📧 Daily Email Report →</a>
       </div>
     </div>);
 
@@ -1043,7 +1047,9 @@ function Dashboard({ agent, allTix, allTickets, shifts, activeMonth }) {
   const dayOfWeek = today.getDay();
   const monday = new Date(today);monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + weekOffset * 7);
   const weekDays = Array.from({ length: 7 }, function (_, i) {const d = new Date(monday);d.setDate(monday.getDate() + i);return d;});
-  const weekLabel = 'WEEK OF ' + monday.getDate() + ' ' + monday.toLocaleString('en-GB', { month: 'short' }).toUpperCase();
+  const _wkNum = Math.ceil(monday.getDate() / 7);
+  const _wkEnd = new Date(monday); _wkEnd.setDate(monday.getDate() + 6);
+  const weekLabel = 'WEEK ' + _wkNum + ' · ' + monday.getDate() + '\u2013' + _wkEnd.getDate() + ' ' + monday.toLocaleString('en-GB', { month: 'short' }).toUpperCase();
   const isThisWeek = weekOffset === 0;
   const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -1586,7 +1592,7 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
   const [expTo, setExpTo] = useState('');
   const [cellEdit, setCellEdit] = useState(null); // {id,field,val}
   const [bulkCat, setBulkCat] = useState('');
-  function applyBulkCat() {if (!selected.size || !bulkCat) return;var auto = getResp(bulkCat);var patch = { category: bulkCat };if (auto) patch.resp = auto;Array.from(selected).forEach(function (id) {var t = safeTix.find(function (x) {return x.id === id;});if (t) onUpdate && onUpdate(Object.assign({}, t, patch));});showToast && showToast('🏷 Set on ' + selected.size + ' ticket' + (selected.size > 1 ? 's' : '') + (auto ? ' · ' + auto.split(' ')[0] : '') + ' ✅');setSelected(new Set());setBulkCat('');}
+  function applyBulkCat() {if (!selected.size || !bulkCat) return;var auto = getResp(bulkCat);var patch = { category: bulkCat, updatedAt: new Date().toISOString() };if (auto) patch.resp = auto;Array.from(selected).forEach(function (id) {var t = safeTix.find(function (x) {return x.id === id;});if (t) onUpdate && onUpdate(Object.assign({}, t, patch));});showToast && showToast('🏷 Set on ' + selected.size + ' ticket' + (selected.size > 1 ? 's' : '') + (auto ? ' · ' + auto.split(' ')[0] : '') + ' ✅');setSelected(new Set());setBulkCat('');}
   const XLS_COLS_A = ['category', 'status', 'resp', 'note']; // editable columns in order
   function commitCellA(t, noClose) {
     if (!cellEdit || cellEdit.id !== t.id) return;
@@ -1835,7 +1841,7 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
                       <td onClick={function () {toggleExpand(t);}}><span className="bu-tag">{t.bu}</span></td>
                       <td className={'xls-cell' + (cellEdit && cellEdit.id === t.id && cellEdit.field === 'category' ? ' xls-editing' : '')} style={{ maxWidth: 160, overflow: cellEdit && cellEdit.id === t.id && cellEdit.field === 'category' ? 'visible' : 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: cellEdit && cellEdit.id === t.id && cellEdit.field === 'category' ? 0 : undefined }} onDoubleClick={function (ev) {ev.stopPropagation();setCellEdit({ id: t.id, field: 'category', val: t.category || t.issue || '' });}} onClick={function (ev) {if (cellEdit && cellEdit.id === t.id) ev.stopPropagation();else toggleExpand(t);}}>
                         {cellEdit && cellEdit.id === t.id && cellEdit.field === 'category' ?
-                        <select className="xls-sel" autoFocus value={cellEdit.val} onChange={function (ev) {setCellEdit(Object.assign({}, cellEdit, { val: ev.target.value }));}} onBlur={function () {commitCellA(t);}} onKeyDown={function (ev) {xlsNavA(ev, t, 'category', paged);}}>{CATS.map(function (c) {return <option key={c} value={c}>{c}</option>;})}</select> :
+                        <select className="xls-sel" autoFocus value={cellEdit.val} onChange={function (ev) {setCellEdit(Object.assign({}, cellEdit, { val: ev.target.value }));}} onBlur={function () {commitCellA(t);}} onKeyDown={function (ev) {xlsNavA(ev, t, 'category', paged);}}>{catOptionsFor(cellEdit.val).map(function (c) {return <option key={c} value={c}>{c}</option>;})}</select> :
                         <><div className="cat-main" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(t.category || t.issue || '—').split(/[—/]/)[0].trim().toUpperCase()}</div><span className="xls-hint">dbl-click to edit</span></>
                         }
                       </td>
@@ -1919,7 +1925,7 @@ function AllComplaints({ agent, allTix, onUpdate, onDelete, onDeleteBulk, showTo
                   <div>
                     <label className="lbl">Category</label>
                     <select className="sel" value={me.category} onChange={function (ev) {setEdit(mt.id, 'category', ev.target.value);var auto = getResp(ev.target.value);if (auto) setEdit(mt.id, 'resp', auto);}}>p', auto);}}>
-                      {CATS.map(function (c) {return <option key={c} value={c}>{c}</option>;})}
+                      {catOptionsFor(me.category).map(function (c) {return <option key={c} value={c}>{c}</option>;})}
                     </select>
                   </div>
                   <div>
@@ -2154,6 +2160,115 @@ function SlotReport({ agent, tickets, showToast, agentShift }) {
     catch(function () {(showToast || alert)('Copy failed — try selecting text manually.', 'error');});
   }
 
+  function copyToOutlook() {
+    function tRowE(t, i) {
+      var statusCol = t.status==='resolved'?'#22C55E':t.status==='progress'?'#F59E0B':'#EF4444';
+      var statusLabel = t.status==='resolved'?'RESOLVED':t.status==='progress'?'IN PROGRESS':'UNRESOLVED';
+      return '<tr style="background:'+(i%2===0?'#F8FAFC':'#fff')+';border-bottom:1px solid #E2E8F0">'+
+        '<td style="padding:7px 10px;font-size:11px;color:#94A3B8;font-family:monospace">'+(i+1)+'</td>'+
+        '<td style="padding:7px 10px;font-family:monospace;font-weight:700;color:#1D4ED8">#'+t.num+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px">'+t.name+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px">'+t.phone+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px">'+t.category+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px"><span style="background:'+statusCol+'22;color:'+statusCol+';padding:2px 7px;border-radius:4px;font-weight:700;font-size:10px">'+statusLabel+'</span></td>'+
+        '<td style="padding:7px 10px;font-size:10px;color:#64748B">'+((t.note||'').slice(0,60))+'</td>'+
+      '</tr>';
+    }
+    var rows = todayTix.map(tRowE).join('');
+    var rateColor = rate>=80?'#22C55E':rate>=50?'#F59E0B':'#EF4444';
+    var slotLabel = s.label + ' — ' + s.emoji;
+    var emailHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+      '<style>body{font-family:Arial,sans-serif;background:#F1F5F9;margin:0;padding:0}</style>'+
+      '</head><body style="margin:0;padding:16px">'+
+      '<div style="max-width:800px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)">'+
+        '<div style="background:linear-gradient(135deg,#1D4ED8,#0F172A);color:#fff;padding:20px 28px">'+
+          '<div style="display:flex;align-items:center;gap:16px">'+
+            '<div style="background:rgba(255,255,255,.15);border-radius:10px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px">⚡</div>'+
+            '<div>'+
+              '<div style="font-size:12px;letter-spacing:.12em;opacity:.7;text-transform:uppercase">EKEDP Customer Experience</div>'+
+              '<div style="font-size:20px;font-weight:800">EKEDP EMAIL REPORT</div>'+
+              '<div style="font-size:11px;opacity:.75">'+dateStr+' · '+slotLabel+' · Customer Experience Department</div>'+
+            '</div>'+
+            '<div style="margin-left:auto;text-align:right">'+
+              '<div style="font-size:20px;font-weight:800">'+s.emoji+' '+s.label+'</div>'+
+              '<div style="font-size:11px;opacity:.75">Cumulative as of '+s.label+'</div>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #E2E8F0">'+
+          ['<div style="padding:16px 14px;text-align:center;border-right:1px solid #E2E8F0"><div style="font-size:28px;font-weight:800;color:#1D4ED8">'+todayTix.length+'</div><div style="font-size:10px;color:#64748B;text-transform:uppercase;letter-spacing:.1em">Total Today</div></div>',
+           '<div style="padding:16px 14px;text-align:center;border-right:1px solid #E2E8F0"><div style="font-size:28px;font-weight:800;color:#22C55E">'+resTix.length+'</div><div style="font-size:10px;color:#64748B;text-transform:uppercase;letter-spacing:.1em">Resolved</div></div>',
+           '<div style="padding:16px 14px;text-align:center;border-right:1px solid #E2E8F0"><div style="font-size:28px;font-weight:800;color:#F59E0B">'+prgTix.length+'</div><div style="font-size:10px;color:#64748B;text-transform:uppercase;letter-spacing:.1em">In Progress</div></div>',
+           '<div style="padding:16px 14px;text-align:center"><div style="font-size:28px;font-weight:800;color:'+rateColor+'">'+rate+'%</div><div style="font-size:10px;color:#64748B;text-transform:uppercase;letter-spacing:.1em">Resolution Rate</div></div>'].join('')+
+        '</div>'+
+        '<table style="width:100%;border-collapse:collapse">'+
+          '<thead><tr style="background:#1E3A8A;color:#fff">'+
+            '<th style="padding:10px;text-align:left;font-size:11px">S/N</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Ticket #</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Customer</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Phone</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Category</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Status</th>'+
+            '<th style="padding:10px;text-align:left;font-size:11px">Action Taken</th>'+
+          '</tr></thead><tbody>'+rows+'</tbody></table>'+
+        '<div style="padding:14px 20px;background:#F8FAFC;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8">'+
+          'Sent by: '+agent.name+' · EKEDP Power App · Marina HQ'+
+        '</div>'+
+      '</div></body></html>';
+    // Try rich clipboard (text/html), fallback to execCommand
+    if (navigator.clipboard && window.ClipboardItem) {
+      var item = new ClipboardItem({'text/html': new Blob([emailHtml],{type:'text/html'}),'text/plain': new Blob([emailHtml],{type:'text/plain'})});
+      navigator.clipboard.write([item]).then(function(){showToast && showToast('Email copied ✓ — paste into Outlook');}).catch(fallback);
+    } else { fallback(); }
+    function fallback() {
+      var holder = document.createElement('div');
+      holder.contentEditable='true';holder.innerHTML=emailHtml;
+      holder.style.cssText='position:fixed;left:-99999px;top:0;opacity:0';
+      document.body.appendChild(holder);
+      var r=document.createRange();r.selectNodeContents(holder);
+      var sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
+      document.execCommand('copy');sel.removeAllRanges();
+      document.body.removeChild(holder);
+      showToast && showToast('Email copied ✓ — paste into Outlook');
+    }
+  }
+
+  function sendViaFlow() {
+    var rptUrl = localStorage.getItem('ek_pa_report_url') || '';
+    if (!rptUrl) { showToast && showToast('⚠️ Set Report Email URL in Cloud Sync first', 'error'); return; }
+    // Always read fresh from localStorage so counts are never stale
+    var allLive = [];
+    try { allLive = JSON.parse(localStorage.getItem('ek_v2_tickets') || '[]'); } catch(e) {}
+    var dw = getDutyWindow();
+    var liveTix = allLive.filter(function(t) {
+      var raw = t.created || t.receivedAt || t.loggedAt || '';
+      if (!raw) return false;
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) return false;
+      var watD = new Date(d.toLocaleString('en-US', {timeZone: 'Africa/Lagos'}));
+      return watD >= dw.start && watD <= dw.end;
+    });
+    var liveRes = liveTix.filter(function(t){return t.status==='resolved';});
+    var livePrg = liveTix.filter(function(t){return t.status==='progress';});
+    var liveUnr = liveTix.filter(function(t){return t.status==='unresolved';});
+    var liveRate = liveTix.length ? Math.round(liveRes.length/liveTix.length*100) : 0;
+    var rpMap = {};
+    liveTix.forEach(function(t){var k=t.resp||'Unassigned';if(!rpMap[k])rpMap[k]={total:0,res:0,prg:0,unr:0};rpMap[k].total++;if(t.status==='resolved')rpMap[k].res++;else if(t.status==='progress')rpMap[k].prg++;else rpMap[k].unr++;});
+    var payload = {
+      slot: s.label, date: todayStr, dateLabel: dateStr,
+      agentName: agent.name, agentId: agent.id,
+      total: liveTix.length, resolved: liveRes.length,
+      inProgress: livePrg.length, unresolved: liveUnr.length,
+      resolutionRate: liveRate,
+      responsibleBreakdown: Object.entries(rpMap).sort(function(a,b){return b[1].total-a[1].total;}).map(function(r){return {name:r[0],total:r[1].total,resolved:r[1].res,inProgress:r[1].prg,unresolved:r[1].unr,rate:r[1].total?Math.round(r[1].res/r[1].total*100):0};}),
+      sentAt: new Date().toISOString()
+    };
+    showToast && showToast('⏳ Sending to flow…');
+    fetch(rptUrl, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); showToast && showToast('✅ Report sent via flow! ('+liveTix.length+' tickets, '+liveRate+'%)'); })
+      .catch(function(e){ showToast && showToast('❌ Flow error: '+e.message, 'error'); });
+  }
+
   function doPDF() {
     function tRow(t, i) {
       return '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#f8fafc') + '">' +
@@ -2214,7 +2329,7 @@ function SlotReport({ agent, tickets, showToast, agentShift }) {
     function makeSheet(list, name) {
       const ws = XLSX.utils.aoa_to_sheet([
       ['EKEDP Power App — ' + s.label], ['Agent: ' + agent.name], ['Date: ' + dateStr], [''], H,
-      ...list.map(function (t) {return [t.num, t.time, t.name, t.phone, t.meter || '', t.bu, t.issue, t.status, t.note || ''];})]
+      ...list.map(function (t) {return [t.num, t.time, t.name, t.phone, t.meter || '', t.bu, t.category || t.issue || '', t.status, t.note || ''];})]
       );
       ws['!cols'] = [10, 8, 22, 14, 14, 10, 26, 12, 30].map(function (w) {return { wch: w };});
       XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
@@ -2231,9 +2346,9 @@ function SlotReport({ agent, tickets, showToast, agentShift }) {
     <div>
       <div className="topbar">
         <div>
-          <div className="eyebrow">SLOT REPORTS</div>
-          <div className="page-title">Slot Reports</div>
-          <div style={{ font: '500 11px Sora,sans-serif', color: 'var(--muted)', marginTop: 4 }}>Generate WhatsApp updates and PDF reports for your shift slot</div>
+          <div className="eyebrow">EMAIL REPORTING</div>
+          <div className="page-title">Email Reporting</div>
+          <div style={{ font: '500 11px Sora,sans-serif', color: 'var(--muted)', marginTop: 4 }}>Generate and send slot reports to Responsible Parties via Outlook or Power Automate flow</div>
         </div>
         <LiveClock />
       </div>
@@ -2276,8 +2391,8 @@ function SlotReport({ agent, tickets, showToast, agentShift }) {
           })}
         </div>
 
-        {/* ── Action cards (3 only — no Email GMs) ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+        {/* ── Action cards (4: PDF, WhatsApp, Excel, Copy to Outlook) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 18 }}>
           <button onClick={doPDF} style={{ padding: '20px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, transition: 'opacity .15s' }} onMouseEnter={function (e) {e.currentTarget.style.opacity = '.85';}} onMouseLeave={function (e) {e.currentTarget.style.opacity = '1';}}>
             <span style={{ fontSize: 26 }}>📄</span>
             <span style={{ font: '800 13px Sora,sans-serif' }}>PDF Report</span>
@@ -2293,7 +2408,15 @@ function SlotReport({ agent, tickets, showToast, agentShift }) {
             <span style={{ font: '800 13px Sora,sans-serif' }}>Excel Export</span>
             <span style={{ font: '500 10px Sora,sans-serif', opacity: .8 }}>4 sheets</span>
           </button>
+          <button onClick={copyToOutlook} style={{ padding: '20px 16px', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, transition: 'opacity .15s' }} onMouseEnter={function (e) {e.currentTarget.style.opacity = '.85';}} onMouseLeave={function (e) {e.currentTarget.style.opacity = '1';}}>
+            <span style={{ fontSize: 26 }}>📧</span>
+            <span style={{ font: '800 13px Sora,sans-serif' }}>Copy to Outlook</span>
+            <span style={{ font: '500 10px Sora,sans-serif', opacity: .8 }}>Paste into email</span>
+          </button>
         </div>
+        <button onClick={sendViaFlow} style={{ width: '100%', padding: '14px 16px', background: 'linear-gradient(135deg,#1D4ED8,#0F172A)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 18, font: '800 13px Sora,sans-serif', boxShadow: '0 4px 14px rgba(29,78,216,.35)' }} onMouseEnter={function(e){e.currentTarget.style.opacity='.88';}} onMouseLeave={function(e){e.currentTarget.style.opacity='1';}}>
+          <span style={{ fontSize: 18 }}>📤</span> Send via Flow — {s.label}
+        </button>
 
         {/* ── Slot summary insight card ── */}
         <div className="card" style={{ overflow: 'hidden' }}>
@@ -2665,8 +2788,11 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
   // ── Power Automate URL keys (no GitHub / Gist anywhere) ──
   const PA_PULL_KEY = 'ek_pa_pull_url';
   const PA_PUSH_KEY = 'ek_pa_push_url';
+  const PA_REPORT_KEY = 'ek_pa_report_url';
   const [pullUrl, setPullUrl] = useState(() => localStorage.getItem(PA_PULL_KEY) || '');
   const [pushUrl, setPushUrl] = useState(() => localStorage.getItem(PA_PUSH_KEY) || '');
+  const [reportUrl, setReportUrl] = useState(() => localStorage.getItem('ek_pa_report_url') || '');
+  const [reportDraft, setReportDraft] = useState('');
   const recentPushes = { current: ekRecentPushes };
   const [pullDraft, setPullDraft] = useState('');
   const [pushDraft, setPushDraft] = useState('');
@@ -2692,18 +2818,42 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
     if (!u) {showToast('Paste your Power Automate Push URL first', 'error');return;}
     localStorage.setItem(PA_PUSH_KEY, u);setPushUrl(u);setPushDraft('');showToast('Push URL saved ✓');
   }
+  function saveReportUrl() {
+    const u = (reportDraft || '').trim();
+    if (!u) {showToast('Paste Report Email Flow URL first', 'error');return;}
+    localStorage.setItem('ek_pa_report_url', u);setReportUrl(u);setReportDraft('');
+    showToast('Report Email URL saved ✅');
+  }
   function clearUrls() {
-    if (!window.confirm('Clear both Power Automate URLs from this device?')) return;
-    localStorage.removeItem(PA_PULL_KEY);localStorage.removeItem(PA_PUSH_KEY);
-    setPullUrl('');setPushUrl('');showToast('URLs cleared');
+    if (!window.confirm('Clear all Power Automate URLs from this device?')) return;
+    localStorage.removeItem(PA_PULL_KEY);localStorage.removeItem(PA_PUSH_KEY);localStorage.removeItem('ek_pa_report_url');
+    setPullUrl('');setPushUrl('');setReportUrl('');showToast('URLs cleared');
   }
 
   async function pullNow() {
     if (!pullUrl) {showToast('Set your Pull URL first', 'error');return;}
     setSaving(true);setStatus({ msg: 'Pulling from SharePoint via Power Automate…', ok: true });
     try {
-      const res = await fetch(pullUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (!res.ok) throw new Error('HTTP ' + res.status + ' — check your Pull URL');
+      let res, lastErr;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          if (attempt > 1) {
+            const wait = (attempt - 1) * 4000;
+            await new Promise(function (r) {setTimeout(r, wait);});
+          }
+          const ctrl = new AbortController();
+          const tid = setTimeout(function () {ctrl.abort();}, 120000); // 120s
+          res = await fetch(pullUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ triggeredBy: agent.name, triggeredByEmail: agent.email || (agent.name.toLowerCase().replace(/\s+/g, '.') + '@ekedp.com'), source: 'Agents Hub', pulledAt: new Date().toISOString() }) });
+          clearTimeout(tid);
+          if (res.ok || res.status === 404) break;
+          lastErr = new Error('HTTP ' + res.status + (res.status === 502 ? ' (gateway — PA cold start, retrying)' : ''));
+          if (res.status < 500) break;
+        } catch (err) {
+          lastErr = err.name === 'AbortError' ? new Error('Request timed out after 120 s') : err;
+          if (attempt === 3) throw lastErr;
+        }
+      }
+      if (!res || !res.ok) throw lastErr || new Error('HTTP ' + (res ? res.status : 'no response'));
       const cloud1 = await res.json();
 
       // Normalise {manager:[...]} format from Pull All Tickets flow
@@ -2907,7 +3057,17 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
           </div>
         }
 
-        {status.msg && <div style={{ padding: '11px 14px', borderRadius: 10, background: status.ok ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)', border: '1px solid ' + (status.ok ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)'), font: '600 12px Sora,sans-serif', color: status.ok ? 'var(--okb)' : 'var(--bdb)', marginBottom: 12 }}>{status.msg}</div>}
+        {/* ── Report Email URL ── */}
+        {!reportUrl &&
+        <div style={{ padding: '14px', borderRadius: 10, background: 'rgba(124,58,237,.08)', border: '1px solid rgba(124,58,237,.25)', marginBottom: 12 }}>
+          <div style={{ font: '700 10px Sora,sans-serif', color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 6 }}>📤 Report Email Flow URL</div>
+          <div style={{ font: '500 11px/1.6 Sora,sans-serif', color: 'var(--muted)', marginBottom: 10 }}>Paste the Power Automate HTTP trigger URL for the Report Email flow. Once set, <b style={{ color: 'var(--text)' }}>Send via Flow</b> on Email Reporting will email the slot report to all Responsible Parties automatically.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+            <input className="inp" type="text" value={reportDraft} onChange={function (e) {setReportDraft(e.target.value);}} placeholder="https://prod-xx.westeurope.logic.azure.com/…" />
+            <button onClick={saveReportUrl} style={{ padding: '8px 14px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 8, font: '800 12px Sora,sans-serif', cursor: 'pointer' }}>Save</button>
+          </div>
+        </div>
+        } <div style={{ padding: '11px 14px', borderRadius: 10, background: status.ok ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)', border: '1px solid ' + (status.ok ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)'), font: '600 12px Sora,sans-serif', color: status.ok ? 'var(--okb)' : 'var(--bdb)', marginBottom: 12 }}>{status.msg}</div>}
         {preview && <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid var(--bsoft)', font: '600 11px/1.4 JetBrains Mono,monospace', color: 'var(--muted)', marginBottom: 12 }}>☁ SharePoint: {Object.entries(preview).filter(function ([k]) {return k.charAt(0) !== '_';}).map(function ([k, v]) {return k + ': ' + (Array.isArray(v) ? v.length : 0);}).join(' · ')}</div>}
 
         {/* ── Pull / Push buttons ── */}
@@ -2925,7 +3085,7 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
         {lastSync && <div style={{ font: '500 11px Sora,sans-serif', color: 'var(--muted)', marginBottom: 10 }}>Last synced: <b style={{ color: 'var(--okb)' }}>{lastSync}</b></div>}
 
         {/* ── URL management (shown when at least one URL is saved) ── */}
-        {(pullUrl || pushUrl) &&
+        {(pullUrl || pushUrl || reportUrl) &&
         <div style={{ marginTop: 12, borderTop: '1px solid var(--bsoft)', paddingTop: 12 }}>
             <div style={{ font: '700 9px Sora,sans-serif', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Manage URLs</div>
             {pullUrl &&
@@ -2940,6 +3100,12 @@ function CloudSync({ agent, tickets, setTickets, showToast, agentShift }) {
                 <button onClick={savePushUrl} style={{ padding: '7px 11px', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: 7, font: '800 11px Sora,sans-serif', cursor: 'pointer' }}>✓ Update</button>
               </div>
           }
+            {reportUrl &&
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                <input className="inp" type="text" value={reportDraft} onChange={function (e) {setReportDraft(e.target.value);}} placeholder={'Report Email: ' + reportUrl.slice(0, 38) + '…'} style={{ fontSize: 10 }} />
+                <button onClick={saveReportUrl} style={{ padding: '7px 11px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 7, font: '800 11px Sora,sans-serif', cursor: 'pointer' }}>✓ Update</button>
+              </div>
+          }
             <button onClick={clearUrls} style={{ padding: '7px 14px', background: 'rgba(239,68,68,.12)', color: '#EF4444', border: '1px solid rgba(239,68,68,.3)', borderRadius: 7, font: '700 11px Sora,sans-serif', cursor: 'pointer' }}>✕ Clear all URLs</button>
           </div>
         }
@@ -2952,7 +3118,7 @@ function EditModal({ ticket, agent, onSave, onDelete, onClose }) {
   const [open, setOpen] = React.useState(false);
   const [status, setStatus] = useState(ticket.status || 'unresolved');
   const [note, setNote] = useState(ticket.note || '');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(ticket.category || ticket.issue || '');
   const [resp, setResp] = useState(ticket.resp || '');
   const [email, setEmail] = useState(ticket.email || '');
   React.useEffect(function () {
@@ -3007,7 +3173,7 @@ function EditModal({ ticket, agent, onSave, onDelete, onClose }) {
               <label className="lbl">Category</label>
               <select className="sel" value={category} onChange={function (ev) {setCategory(ev.target.value);var a = typeof getResp === 'function' ? getResp(ev.target.value) : '';if (a) setResp(a);}}>
                 <option value="">— Select —</option>
-                {CATS.map(function (c) {return <option key={c} value={c}>{c}</option>;})}
+                {catOptionsFor(ticket.category).map(function (c) {return <option key={c} value={c}>{c}</option>;})}
               </select>
             </div>
             <div>
