@@ -50,8 +50,8 @@ header{
 
 /* HUB CARDS GRID */
 .hubs{
-  display:grid;grid-template-columns:1fr 1fr;gap:12px;
-  padding:0 40px;max-width:960px;margin:0 auto;width:100%;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+  padding:0 40px;max-width:1200px;margin:0 auto;width:100%;
 }
 .hub-card{
   background:rgba(8,16,42,.62);
@@ -182,19 +182,6 @@ footer{margin-top:auto;padding:4px 0;text-align:center;}
     <div class="hub-cta">Open Agents Hub →</div>
   </a>
 
-  <!-- Daily Email Report -->
-  <a class="hub-card" href="Daily%20Email%20Report.html">
-    <div class="report-icon">📧</div>
-    <div class="hub-title">Daily Email Report</div>
-    <div class="hub-desc">Auto-generates the 9AM, 12PM &amp; 4PM GM reports with live cloud data. Copy to Outlook in one click.</div>
-    <div class="hub-tags">
-      <span class="hub-tag">9AM</span>
-      <span class="hub-tag">12PM</span>
-      <span class="hub-tag">4PM COB</span>
-      <span class="hub-tag">Outlook</span>
-    </div>
-    <div class="hub-cta">Open Daily Email Report →</div>
-  </a>
 
   <!-- Success Criteria -->
   <a class="hub-card" href="Success%20Criteria.html">
@@ -212,7 +199,7 @@ footer{margin-top:auto;padding:4px 0;text-align:center;}
 <div class="sync-strip">
   <div class="sync-card">
     <div class="sync-dot"></div>
-    <div class="sync-text" style="color: rgba(134,239,172,.82)"><b style="color:#fff">All hubs are in sync</b> — Managers Hub, Agents Hub &amp; Daily Email Report share the same live data via Power Automate &amp; SharePoint.</div>
+    <div class="sync-text" style="color: rgba(134,239,172,.82)"><b style="color:#fff">All hubs are in sync</b> — Managers Hub &amp; Agents Hub share the same live data via Power Automate &amp; SharePoint.</div>
     <div class="sync-meta" id="last-sync" style="color: rgba(134,239,172,.55)">Checking…</div>
   </div>
 </div>
