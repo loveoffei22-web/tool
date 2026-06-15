@@ -246,7 +246,16 @@ function updateSyncStatus(){
     const unresolved=tickets.filter(function(t){return t.status==='unresolved';}).length;
     const ls=localStorage.getItem('ek_last_sync');
     let syncTxt='';
-    if(ls){try{syncTxt=' · Synced '+new Date(ls).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Lagos'});}catch(e){}}
+    if(ls){
+      try{
+        let d;
+        if(/^\d+$/.test(ls)){d=new Date(Number(ls));}
+        else{d=new Date(ls);}
+        if(!isNaN(d.getTime())){
+          syncTxt=' · Synced '+d.toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Lagos'});
+        }
+      }catch(e){}
+    }
     el.textContent=total+' tickets · '+resolved+' resolved'+syncTxt;
     // Live badges on hub cards
     const mBadge=document.getElementById('mgr-badge');
